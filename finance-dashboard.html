@@ -1802,7 +1802,7 @@ If a file is not parseable or irrelevant, skip it. Include ALL transactions foun
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'x-api-key': DB.apiKey, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
       body: JSON.stringify({
-        model:'claude-sonnet-4-20250514',
+        model:'claude-sonnet-4-5',
         max_tokens:8192,
         system: systemPrompt,
         messages:[{ role:'user', content: messageContent }]
