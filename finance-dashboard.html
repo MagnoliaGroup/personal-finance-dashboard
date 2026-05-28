@@ -1739,10 +1739,11 @@ async function processUpload() {
   for (const file of uploadedFiles) {
     if (file.name.match(/\.csv$/i)) {
       const text = await file.text();
-      fileContents.push({ name: file.name, type: 'csv', content: text.slice(0, 60000) });
+      fileContents.push({ name: file.name, type: 'csv', content: text.slice(0, 80000) });
     } else if (file.name.match(/\.pdf$/i)) {
-      const text = await file.text().catch(()=>'[binary PDF]');
-      fileContents.push({ name: file.name, type: 'pdf', content: text.slice(0, 20000) });
+      const text = await file.text().catch(()=>'');
+      const printable = text.replace(/[^\x20-\x7E\n\r\t]/g, ' ').replace(/\s+/g,' ').trim();
+      fileContents.push({ name: file.name, type: 'pdf', content: printable.slice(0, 6000) });
     } else if (file.name.match(/\.(png|jpg|jpeg)$/i)) {
       const b64 = await toBase64(file);
       fileContents.push({ name: file.name, type: 'image', content: b64 });
@@ -1803,7 +1804,7 @@ If a file is not parseable or irrelevant, skip it. Include ALL transactions foun
       headers:{ 'Content-Type':'application/json', 'x-api-key': DB.apiKey, 'anthropic-version':'2023-06-01', 'anthropic-dangerous-direct-browser-access':'true' },
       body: JSON.stringify({
         model:'claude-sonnet-4-5',
-        max_tokens:8192,
+        max_tokens:16000,
         system: systemPrompt,
         messages:[{ role:'user', content: messageContent }]
       })
@@ -1821,11 +1822,40 @@ If a file is not parseable or irrelevant, skip it. Include ALL transactions foun
     const raw = data.content.find(c=>c.type==='text')?.text || '{}';
     let parsed;
     try {
-      const clean = raw.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+      // Strip markdown fences
+      let clean = raw.replace(/```json\n?/g,'').replace(/```\n?/g,'').trim();
+      // Find the JSON object start
+      const start = clean.indexOf('{');
+      if (start > 0) clean = clean.slice(start);
+      // If JSON is truncated (response cut off), try to salvage what we have
+      if (!clean.endsWith('}')) {
+        // Find last complete transaction by truncating to last complete }]
+        const lastGoodTx = clean.lastIndexOf('}');
+        if (lastGoodTx > 0) {
+          // Try closing out the transactions array and object
+          clean = clean.slice(0, lastGoodTx + 1);
+          // Count open brackets to figure out what needs closing
+          let opens = 0, closes = 0;
+          for (const c of clean) { if(c==='{') opens++; if(c==='}') closes++; }
+          // Close transactions array if we're inside it
+          if (clean.includes('"transactions"') && !clean.includes('"income"')) {
+            clean += '],"income":{},"account_updates":[],"summary":"Partial import — response was cut off. Some transactions may be missing."}';
+          } else {
+            clean += '}';
+          }
+        }
+      }
       parsed = JSON.parse(clean);
-    } catch {
-      const match = raw.match(/\{[\s\S]*\}/);
-      parsed = match ? JSON.parse(match[0]) : {};
+    } catch(parseErr) {
+      // Last resort: try to extract whatever partial data we can
+      console.warn('JSON parse failed, attempting partial extraction:', parseErr.message);
+      parsed = { transactions: [], income: {}, account_updates: [], summary: 'Could not fully parse AI response. Try uploading fewer files at once.' };
+      // Try to extract any complete transaction objects
+      const txMatches = raw.matchAll(/"date":"(\d{4}-\d{2}-\d{2})","merchant":"([^"]+)","amount":([-\d.]+),"category":"([^"]+)"/g);
+      for (const m of txMatches) {
+        parsed.transactions.push({ date: m[1], merchant: m[2], amount: parseFloat(m[3]), category: m[4] });
+      }
+      if (parsed.transactions.length > 0) parsed.summary = `Partial import: recovered ${parsed.transactions.length} transactions from truncated response.`;
     }
 
     // Apply transactions
