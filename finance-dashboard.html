@@ -654,19 +654,19 @@
     <div class="metric-delta" id="metricCashDelta"><span class="delta-pos">—</span></div>
   </div>
   <div class="metric-box">
-    <div class="metric-label">This Month Income</div>
+    <div class="metric-label">YTD Income</div>
     <div class="metric-value" id="metricIncome">$0</div>
-    <div class="metric-delta"><span style="color:var(--text3)">Combined household</span></div>
+    <div class="metric-delta"><span style="color:var(--text3)" id="metricIncomeYear"></span></div>
   </div>
   <div class="metric-box">
-    <div class="metric-label">This Month Spent</div>
+    <div class="metric-label">YTD Expenses</div>
     <div class="metric-value" id="metricSpent">$0</div>
-    <div class="metric-delta" id="metricSpentDelta"><span class="delta-pos">—</span></div>
+    <div class="metric-delta"><span style="color:var(--text3)" id="metricSpentYear"></span></div>
   </div>
   <div class="metric-box">
-    <div class="metric-label">This Month Savings</div>
+    <div class="metric-label">YTD Savings</div>
     <div class="metric-value" id="metricSavings">$0</div>
-    <div class="metric-delta"><span style="color:var(--text3)">Income − Spent</span></div>
+    <div class="metric-delta"><span style="color:var(--text3)">Income − Expenses</span></div>
   </div>
 </div>
 
@@ -675,6 +675,7 @@
   <div class="tab active" onclick="switchTab('overview')">Overview</div>
   <div class="tab" onclick="switchTab('accounts')">Accounts</div>
   <div class="tab" onclick="switchTab('expenses')">Expenses</div>
+  <div class="tab" onclick="switchTab('income')">Income</div>
   <div class="tab" onclick="switchTab('upload')">Monthly Upload</div>
   <div class="tab" onclick="switchTab('rules')">Rules</div>
   <div class="tab" onclick="switchTab('history')">History</div>
@@ -735,7 +736,7 @@
 
     <div class="card">
       <div class="card-header">
-        <div><div class="card-title">Income vs Expenses</div><div class="card-sub">Month by month — current year vs prior</div></div>
+        <div><div class="card-title">Income vs Expenses</div><div class="card-sub">Month by month — current year vs prior year</div></div>
         <div class="month-selector">
           <select id="ovYearSelect" onchange="renderOverviewCharts()" style="width:90px"></select>
         </div>
@@ -784,7 +785,33 @@
     </div>
   </div>
 
-  <!-- ═══ UPLOAD ═══ -->
+  <!-- ═══ INCOME ═══ -->
+  <div class="tab-panel" id="panel-income">
+    <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;flex-wrap:wrap">
+      <div>
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Year</div>
+        <select id="incomeYear" onchange="renderIncomeTab()" style="width:100px"></select>
+      </div>
+      <div style="flex:1"></div>
+      <div style="text-align:right">
+        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">YTD Total</div>
+        <div style="font-family:var(--sans);font-size:28px;font-weight:800;color:var(--accent)" id="incomeTotalDisplay">$0</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Income Transactions</div>
+          <div class="card-sub">All deposits from Old National accounts — click ✕ to exclude from total</div>
+        </div>
+      </div>
+      <div id="incomeTableWrap">
+        <div class="empty-state"><div class="empty-icon">💰</div>No income transactions yet — upload your Old National CSV</div>
+      </div>
+    </div>
+  </div>
+
+    <!-- ═══ UPLOAD ═══ -->
   <div class="tab-panel" id="panel-upload">
     <div class="api-key-notice">
       <span>🔑</span>
@@ -894,7 +921,27 @@
 //  DATA STORE
 // ═══════════════════════════════════════════════════════
 const CATEGORIES = ['Mortgage','Food & Restaurants','Shopping','Home Improvement',
-  'Transportation','Travel','Gym','Home Utilities','Insurance','Tax','Income','Misc'];
+  'Transportation','Travel','Gym','Home Utilities','Insurance','Tax','Misc'];
+
+// Keywords that indicate a transfer/internal movement — never count as income or expense
+const TRANSFER_KEYWORDS = [
+  'TRANSFER', 'XFER', 'ZELLE TO', 'ZELLE FROM', 'ACH TO', 'ACH FROM',
+  'ONLINE PAYMENT', 'PAYMENT THANK YOU', 'AUTOPAY', 'CHASE PAYMENT',
+  'CREDIT CARD PAYMENT', 'CC PAYMENT', 'CARD PAYMENT',
+  'OLD NATIONAL TO', 'OLD NATIONAL FROM', 'INTERNAL',
+  'INVESTMENT TRANSFER', 'BROKERAGE', 'VANGUARD TRANSFER',
+  'SCHWAB TRANSFER', 'FIDELITY TRANSFER'
+];
+
+function isTransfer(tx) {
+  const m = (tx.merchant || '').toUpperCase();
+  return TRANSFER_KEYWORDS.some(k => m.includes(k)) || tx.category === 'Transfer';
+}
+
+function isCreditCardPayment(tx) {
+  const m = (tx.merchant || '').toUpperCase();
+  return m.includes('CHASE') && (m.includes('PAYMENT') || m.includes('AUTOPAY') || m.includes('CREDIT'));
+}
 
 const DEFAULT_ACCOUNTS = {
   cash: [
@@ -1001,13 +1048,54 @@ function getMonthTransactions(ym) {
 }
 
 function getMonthIncome(ym) {
-  return DB.income[ym] || 0;
+  // Income = positive transactions in ON checking/savings that are not transfers, not excluded
+  return DB.transactions
+    .filter(t => getYearMonth(t.date) === ym
+      && t.source && (t.source.toLowerCase().includes('checking') || t.source.toLowerCase().includes('savings') || t.source === 'on_checking' || t.source === 'on_savings')
+      && t.amount > 0
+      && !isTransfer(t)
+      && !t.excludeFromIncome)
+    .reduce((s,t) => s + t.amount, 0);
+}
+
+function getYearIncome(year) {
+  return DB.transactions
+    .filter(t => new Date(t.date).getFullYear() === year
+      && t.source && (t.source.toLowerCase().includes('checking') || t.source.toLowerCase().includes('savings') || t.source === 'on_checking' || t.source === 'on_savings')
+      && t.amount > 0
+      && !isTransfer(t)
+      && !t.excludeFromIncome)
+    .reduce((s,t) => s + t.amount, 0);
+}
+
+function getYearSpent(year) {
+  return DB.transactions
+    .filter(t => new Date(t.date).getFullYear() === year
+      && t.amount < 0
+      && !isTransfer(t)
+      && !isCreditCardPayment(t)
+      && t.category !== 'Tax'
+      && t.category !== 'Insurance')
+    .reduce((s,t) => s + Math.abs(t.amount), 0);
 }
 
 function getMonthSpent(ym) {
   const txs = getMonthTransactions(ym);
-  return txs.filter(t => t.amount < 0 && t.category !== 'Income' && t.category !== 'Tax' && t.category !== 'Insurance')
-             .reduce((s,t) => s + Math.abs(t.amount), 0);
+  return txs.filter(t => t.amount < 0
+      && !isTransfer(t)
+      && !isCreditCardPayment(t)
+      && t.category !== 'Tax'
+      && t.category !== 'Insurance')
+    .reduce((s,t) => s + Math.abs(t.amount), 0);
+}
+
+function getIncomeTransactions(year) {
+  return DB.transactions.filter(t =>
+    new Date(t.date).getFullYear() === year
+    && t.source && (t.source.toLowerCase().includes('checking') || t.source.toLowerCase().includes('savings') || t.source === 'on_checking' || t.source === 'on_savings')
+    && t.amount > 0
+    && !isTransfer(t)
+  ).sort((a,b) => new Date(b.date)-new Date(a.date));
 }
 
 function applyRules(merchant) {
@@ -1037,6 +1125,7 @@ function renderAll() {
   updateMetricsStrip();
   renderAccountsTab();
   renderExpenses();
+  renderIncomeTab();
   renderOverviewCharts();
   renderHistoryTab();
   renderRules();
@@ -1074,7 +1163,7 @@ function saveSnapshot(auto=false) {
 // ═══════════════════════════════════════════════════════
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach((t,i) => {
-    const tabs = ['overview','accounts','expenses','upload','rules','history'];
+    const tabs = ['overview','accounts','expenses','income','upload','rules','history'];
     t.classList.toggle('active', tabs[i] === name);
   });
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -1082,6 +1171,7 @@ function switchTab(name) {
   if (name==='overview') renderOverviewCharts();
   if (name==='history') renderHistoryTab();
   if (name==='expenses') renderExpenses();
+  if (name==='income') renderIncomeTab();
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1101,15 +1191,20 @@ function updateMetricsStrip() {
   const cash = calcCash();
   document.getElementById('metricCash').textContent = fmt(cash);
 
-  const ym = thisMonth();
-  const income = getMonthIncome(ym);
-  const spent = getMonthSpent(ym);
-  const savings = income - spent;
+  const currentYear = new Date().getFullYear();
+  const ytdIncome = getYearIncome(currentYear);
+  const ytdSpent = getYearSpent(currentYear);
+  const ytdSavings = ytdIncome - ytdSpent;
 
-  document.getElementById('metricIncome').textContent = fmt(income);
-  document.getElementById('metricSpent').textContent = fmt(spent);
-  document.getElementById('metricSavings').textContent = fmt(savings);
-  document.getElementById('metricSavings').style.color = savings >= 0 ? 'var(--accent)' : 'var(--red)';
+  document.getElementById('metricIncome').textContent = fmt(ytdIncome);
+  document.getElementById('metricSpent').textContent = fmt(ytdSpent);
+  document.getElementById('metricSavings').textContent = fmt(ytdSavings);
+  document.getElementById('metricSavings').style.color = ytdSavings >= 0 ? 'var(--accent)' : 'var(--red)';
+  const yearStr = currentYear + ' YTD';
+  const yEl1 = document.getElementById('metricIncomeYear');
+  const yEl2 = document.getElementById('metricSpentYear');
+  if (yEl1) yEl1.textContent = yearStr;
+  if (yEl2) yEl2.textContent = yearStr;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1131,16 +1226,16 @@ function renderOverviewCharts() {
   document.getElementById('ovNetWorth').textContent = fmt(nw);
   document.getElementById('ovLiquid').textContent = fmt(calcCash() + calcInvestments());
 
-  // Money flow
-  const ym = thisMonth();
-  const income = getMonthIncome(ym);
-  const txs = getMonthTransactions(ym);
-  const tax = txs.filter(t=>t.category==='Tax').reduce((s,t)=>s+Math.abs(t.amount),0);
-  const insurance = txs.filter(t=>t.category==='Insurance').reduce((s,t)=>s+Math.abs(t.amount),0);
-  const expenses = getMonthSpent(ym);
+  // Money flow — YTD
+  const flowYear = new Date().getFullYear();
+  const income = getYearIncome(flowYear);
+  const yearTxs = DB.transactions.filter(t => new Date(t.date).getFullYear() === flowYear);
+  const tax = yearTxs.filter(t=>t.category==='Tax').reduce((s,t)=>s+Math.abs(t.amount),0);
+  const insurance = yearTxs.filter(t=>t.category==='Insurance').reduce((s,t)=>s+Math.abs(t.amount),0);
+  const expenses = getYearSpent(flowYear);
   const savings = Math.max(0, income - expenses - tax - insurance);
 
-  document.getElementById('flowMonthLabel').textContent = monthLabel(ym);
+  document.getElementById('flowMonthLabel').textContent = flowYear + ' Year to Date';
   document.getElementById('flowIncome').textContent = fmt(income);
   document.getElementById('flowSavingsAmt').textContent = fmt(savings);
   document.getElementById('flowExpensesAmt').textContent = fmt(expenses);
@@ -1207,7 +1302,10 @@ function renderOverviewCharts() {
   const prevYear = year - 1;
   const prevMonths = Array.from({length:12},(_,i)=>`${prevYear}-${String(i+1).padStart(2,'0')}`);
   const prevIncomeData = prevMonths.map(m => getMonthIncome(m));
-  const prevExpData = prevMonths.map(m => getMonthSpent(m));
+  const prevExpData = prevMonths.map(m => {
+    const txs = getMonthTransactions(m);
+    return txs.filter(t => t.amount < 0 && !isTransfer(t) && !isCreditCardPayment(t) && t.category !== 'Tax' && t.category !== 'Insurance').reduce((s,t)=>s+Math.abs(t.amount),0);
+  });
 
   destroyChart('chartIncomeExpenses');
   charts.chartIncomeExpenses = new Chart(document.getElementById('chartIncomeExpenses'), {
@@ -1354,7 +1452,7 @@ function renderExpenses() {
 
   // Group by category (exclude income, internal)
   const cats = {};
-  txs.filter(t => t.amount < 0 && t.category !== 'Income').forEach(tx => {
+  txs.filter(t => t.amount < 0 && !isTransfer(t) && !isCreditCardPayment(t) && t.category !== 'Tax' && t.category !== 'Insurance').forEach(tx => {
     const cat = tx.category || 'Misc';
     cats[cat] = (cats[cat] || 0) + Math.abs(tx.amount);
   });
@@ -1446,6 +1544,81 @@ function clearDrill() {
   currentDrillCategory = null;
   document.getElementById('expDrillTitle').textContent = 'Select a category';
   document.getElementById('expDrillContent').innerHTML = '<div class="empty-state"><div class="empty-icon">👆</div>Click a category to see transactions</div>';
+}
+
+// ═══════════════════════════════════════════════════════
+//  INCOME TAB
+// ═══════════════════════════════════════════════════════
+function populateIncomeYearSelector() {
+  const sel = document.getElementById('incomeYear');
+  if (!sel) return;
+  const currentYear = new Date().getFullYear();
+  sel.innerHTML = '';
+  for (let y = currentYear; y >= currentYear - 4; y--) {
+    const o = document.createElement('option');
+    o.value = y; o.textContent = y;
+    sel.appendChild(o);
+  }
+}
+
+function renderIncomeTab() {
+  populateIncomeYearSelector();
+  const sel = document.getElementById('incomeYear');
+  const year = sel ? parseInt(sel.value) : new Date().getFullYear();
+  const txs = getIncomeTransactions(year);
+  const total = txs.filter(t => !t.excludeFromIncome).reduce((s,t) => s + t.amount, 0);
+
+  document.getElementById('incomeTotalDisplay').textContent = fmt(total);
+
+  const wrap = document.getElementById('incomeTableWrap');
+  if (txs.length === 0) {
+    wrap.innerHTML = '<div class="empty-state"><div class="empty-icon">💰</div>No income transactions for ' + year + '<br><br>Upload your Old National checking/savings CSV to populate this</div>';
+    return;
+  }
+
+  wrap.innerHTML = `
+    <table class="tx-table">
+      <thead><tr>
+        <th>Date</th>
+        <th>Description</th>
+        <th>Amount</th>
+        <th>Source</th>
+        <th style="text-align:center">In Total</th>
+        <th></th>
+      </tr></thead>
+      <tbody>
+        ${txs.map(tx => `
+          <tr style="${tx.excludeFromIncome ? 'opacity:0.4' : ''}">
+            <td style="color:var(--text3)">${new Date(tx.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</td>
+            <td>${tx.merchant}</td>
+            <td style="color:var(--accent);font-family:var(--sans);font-weight:700">${fmt(tx.amount)}</td>
+            <td style="color:var(--text3);font-size:11px">${tx.source || '—'}</td>
+            <td style="text-align:center">${tx.excludeFromIncome ? '<span style="color:var(--red)">excluded</span>' : '<span style="color:var(--accent)">✓</span>'}</td>
+            <td>
+              <button class="btn btn-sm ${tx.excludeFromIncome ? 'btn-accent' : 'btn-danger'}"
+                onclick="toggleIncomeExclusion('${tx.id}')">
+                ${tx.excludeFromIncome ? '+ Include' : '✕ Exclude'}
+              </button>
+            </td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+    <div style="padding:14px 12px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+      <span style="font-size:11px;color:var(--text3)">${txs.filter(t=>!t.excludeFromIncome).length} of ${txs.length} transactions included</span>
+      <span style="font-family:var(--sans);font-weight:700;font-size:18px;color:var(--accent)">${year} Total: ${fmt(total)}</span>
+    </div>
+  `;
+}
+
+function toggleIncomeExclusion(txId) {
+  const tx = DB.transactions.find(t => t.id === txId);
+  if (tx) {
+    tx.excludeFromIncome = !tx.excludeFromIncome;
+    saveData(DB);
+    renderIncomeTab();
+    updateMetricsStrip();
+  }
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1793,7 +1966,10 @@ Return this exact structure:
 
 Rules:
 - Expenses: negative amounts. Credits/refunds: positive amounts.
-- Skip internal transfers between own accounts (e.g. "Transfer", "Payment Thank You", "Online Payment")
+- CRITICAL: For Old National checking/savings CSVs, mark deposits (positive amounts) with category "Income" ONLY if they are NOT transfers. Use source field = "on_checking" or "on_savings"
+- Skip/exclude these from the transactions array entirely: credit card payments to Chase, internal transfers between own accounts labeled Transfer/Zelle To/ACH To/Online Payment/Payment Thank You
+- Do NOT skip legitimate income deposits (payroll, direct deposit, client payments, etc.)
+- For Chase CC CSV: only include purchases/expenses (negative charges). Skip payments back to Chase.
 - Extract ALL transactions, do not truncate or summarize
 - Dates must be YYYY-MM-DD format`;
 
