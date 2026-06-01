@@ -1032,6 +1032,7 @@ let DB = loadData();
 let uploadedFiles = [];
 let charts = {};
 let currentDrillCategory = null;
+let currentDrillYm = null;
 let dragSrcTxId = null;
 
 // ═══════════════════════════════════════════════════════
@@ -1214,7 +1215,9 @@ function updateMetricsStrip() {
   const el = document.getElementById('metricNetWorthDelta');
   if (prevSnap) {
     const delta = nw - prevSnap.netWorth;
-    el.innerHTML = `<span class="${delta>=0?'delta-pos':'delta-neg'}">${delta>=0?'▲':'▼'} ${fmt(Math.abs(delta))} vs last snapshot</span>`;
+    const cls = delta>=0 ? 'delta-pos' : 'delta-neg';
+    const arr = delta>=0 ? '▲' : '▼';
+    el.innerHTML = '<span class="' + cls + '">' + arr + ' ' + fmt(Math.abs(delta)) + ' vs last snapshot</span>';
   }
 
   const cash = calcCash();
@@ -1513,6 +1516,7 @@ function renderExpenses() {
 
 function drillCategory(cat, ym) {
   currentDrillCategory = cat;
+  currentDrillYm = ym;
   const txs = getMonthTransactions(ym).filter(t => t.category === cat && t.amount < 0);
   const titleEl = document.getElementById('expDrillTitle');
   titleEl.textContent = cat + ' — ' + txs.length + ' transactions';
@@ -1523,37 +1527,78 @@ function drillCategory(cat, ym) {
     return;
   }
 
-  const otherCats = CATEGORIES.filter(c=>c!==cat);
+  const otherCats = getCategories().filter(c=>c!==cat);
 
-  content.innerHTML = `
-    <table class="tx-table">
-      <thead><tr><th>Date</th><th>Merchant</th><th>Amount</th><th>Category</th></tr></thead>
-      <tbody>
-        ${txs.map(tx=>`
-          <tr draggable="true" data-txid="${tx.id}" class="tx-row">
-            <td style="color:var(--text3)">${new Date(tx.date).toLocaleDateString('en-US',{month:'short',day:'numeric'})}</td>
-            <td>${tx.merchant}</td>
-            <td class="tx-amount-neg">${fmt(Math.abs(tx.amount))}</td>
-            <td>
-              <select class="category-pill" data-txid="${tx.id}" style="width:auto;padding:2px 8px;font-size:10px" onchange="reclassify(this)">
-                <option value="${cat}" selected>${cat}</option>
-                ${otherCats.map(c=>`<option value="${c}">${c}</option>`).join('')}
-              </select>
-            </td>
-          </tr>
-        `).join('')}
-      </tbody>
-    </table>
-  `;
+  // Build table via DOM to avoid quote-escaping issues in nested template literals
+  const table = document.createElement('table');
+  table.className = 'tx-table';
+  table.innerHTML = '<thead><tr><th>Date</th><th>Merchant</th><th>Amount</th><th>Category</th><th></th></tr></thead><tbody></tbody>';
+  const tbody = table.querySelector('tbody');
 
-  // drag-to-reclassify rows
-  content.querySelectorAll('.tx-row').forEach(row => {
-    row.addEventListener('dragstart', e => {
-      dragSrcTxId = row.dataset.txid;
-      row.classList.add('dragging');
+  txs.forEach(tx => {
+    const tr = document.createElement('tr');
+    tr.draggable = true;
+    tr.dataset.txid = tx.id;
+    tr.className = 'tx-row';
+
+    // Date
+    const tdDate = document.createElement('td');
+    tdDate.style.color = 'var(--text3)';
+    tdDate.textContent = new Date(tx.date).toLocaleDateString('en-US', {month:'short', day:'numeric'});
+    tr.appendChild(tdDate);
+
+    // Merchant
+    const tdMerchant = document.createElement('td');
+    tdMerchant.textContent = tx.merchant;
+    tr.appendChild(tdMerchant);
+
+    // Amount
+    const tdAmt = document.createElement('td');
+    tdAmt.className = 'tx-amount-neg';
+    tdAmt.textContent = fmt(Math.abs(tx.amount));
+    tr.appendChild(tdAmt);
+
+    // Category select
+    const tdCat = document.createElement('td');
+    const sel = document.createElement('select');
+    sel.className = 'category-pill';
+    sel.dataset.txid = tx.id;
+    sel.style.cssText = 'width:auto;padding:2px 8px;font-size:10px';
+    sel.onchange = function() { reclassify(this); };
+    const allCats = [cat, ...otherCats];
+    allCats.forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c;
+      opt.textContent = c;
+      if (c === cat) opt.selected = true;
+      sel.appendChild(opt);
     });
-    row.addEventListener('dragend', () => row.classList.remove('dragging'));
+    tdCat.appendChild(sel);
+    tr.appendChild(tdCat);
+
+    // Delete button
+    const tdDel = document.createElement('td');
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn btn-sm btn-danger';
+    delBtn.textContent = 'Delete';
+    delBtn.title = 'Remove from expenses';
+    delBtn.dataset.txid = tx.id;
+    delBtn.addEventListener('click', () => deleteTransaction(delBtn));
+    tdDel.appendChild(delBtn);
+    tr.appendChild(tdDel);
+
+    // Drag handlers
+    tr.addEventListener('dragstart', () => {
+      dragSrcTxId = tx.id;
+      tr.classList.add('dragging');
+    });
+    tr.addEventListener('dragend', () => tr.classList.remove('dragging'));
+
+    tbody.appendChild(tr);
   });
+
+  content.innerHTML = '';
+  content.appendChild(table);
 }
 
 function reclassify(sel) {
@@ -1567,6 +1612,22 @@ function reclassify(sel) {
     renderExpenses();
     if (currentDrillCategory !== newCat) drillCategory(currentDrillCategory, ym);
   }
+}
+
+function deleteTransaction(btn) {
+  const txId = btn.dataset.txid;
+  const tx = DB.transactions.find(t => t.id === txId);
+  if (!tx) return;
+  const label = tx.merchant + ' — ' + fmt(Math.abs(tx.amount));
+  if (!confirm('Delete "' + label + '"? This removes it from expenses and all totals. You can re-upload your CSV to restore it.')) return;
+  DB.transactions = DB.transactions.filter(t => t.id !== txId);
+  saveData(DB);
+  updateMetricsStrip();
+  renderExpenses();
+  if (currentDrillCategory && currentDrillYm) {
+    drillCategory(currentDrillCategory, currentDrillYm);
+  }
+  showToast('Transaction deleted');
 }
 
 function clearDrill() {
