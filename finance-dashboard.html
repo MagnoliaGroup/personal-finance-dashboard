@@ -878,7 +878,6 @@
       <div>
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
           <div class="card-title">Active Rules (<span id="ruleCount">0</span>)</div>
-          <button class="btn btn-accent btn-sm" onclick="applyAllRules()">↺ Re-apply All Rules</button>
         </div>
         <div id="rulesList"></div>
       </div>
@@ -1757,6 +1756,7 @@ function renderRules() {
       <div class="rule-arrow">→</div>
       <div class="rule-category">${rule.category}</div>
       <div class="rule-actions">
+        <button class="btn btn-sm btn-accent" onclick="applyOneRule(${i})" title="Re-categorize all matching transactions">Apply</button>
         <button class="btn btn-sm" onclick="editRule(${i})">Edit</button>
         <button class="btn btn-sm btn-danger" onclick="deleteRule(${i})">Delete</button>
       </div>
@@ -1801,27 +1801,24 @@ function deleteCategory(idx) {
   showToast(`"${name}" removed`);
 }
 
-function applyAllRules(silent=false) {
-  // Re-run every rule against every transaction and update category if it matches
-  // Only reclassifies transactions that are currently in auto-classifiable categories
-  // (won't override anything the user has manually set to a non-Misc category... 
-  //  actually we DO override all — rules are the source of truth)
+function applyOneRule(i) {
+  // Apply a single rule to ALL transactions that match its keywords, regardless of current category
+  const rule = DB.rules[i];
+  const keywords = rule.keyword.split(',').map(k => k.trim().toUpperCase());
   let changed = 0;
   DB.transactions.forEach(tx => {
-    if (tx.amount >= 0) return; // skip income/credits
-    const matched = applyRules(tx.merchant);
-    if (matched !== tx.category) {
-      tx.category = matched;
+    if (tx.amount >= 0) return; // skip credits/income
+    const merchant = (tx.merchant || '').toUpperCase();
+    const matches = keywords.some(k => k && merchant.includes(k));
+    if (matches && tx.category !== rule.category) {
+      tx.category = rule.category;
       changed++;
     }
   });
   saveData(DB);
-  if (!silent) {
-    renderExpenses();
-    updateMetricsStrip();
-    showToast(changed + ' transaction' + (changed !== 1 ? 's' : '') + ' re-categorized');
-  }
-  return changed;
+  renderExpenses();
+  updateMetricsStrip();
+  showToast(changed + ' transaction' + (changed !== 1 ? 's' : '') + ' moved to ' + rule.category);
 }
 
 function addRule() {
@@ -1831,9 +1828,9 @@ function addRule() {
   DB.rules.push({ keyword: kw.toUpperCase(), category: cat });
   saveData(DB);
   document.getElementById('ruleKeyword').value = '';
-  const changed = applyAllRules(true);
   renderRules();
-  showToast('Rule added — ' + changed + ' transaction' + (changed !== 1 ? 's' : '') + ' updated');
+  // Auto-apply the new rule immediately
+  applyOneRule(DB.rules.length - 1);
 }
 
 function deleteRule(i) {
@@ -1858,12 +1855,10 @@ function editRule(i) {
     { label:'Save', cls:'btn btn-accent', action: () => {
       rule.keyword = document.getElementById('editRuleKw').value.trim().toUpperCase();
       rule.category = document.getElementById('editRuleCat').value;
-      const changed = applyAllRules(true);
       saveData(DB);
       renderRules();
-      renderExpenses();
       closeModal();
-      showToast(changed + ' transaction' + (changed !== 1 ? 's' : '') + ' re-categorized');
+      applyOneRule(i);
     }}
   ]);
 }
