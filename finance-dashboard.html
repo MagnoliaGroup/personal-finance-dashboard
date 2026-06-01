@@ -826,11 +826,15 @@
       <div class="upload-files-list" id="uploadFileList"></div>
     </div>
 
-    <div style="display:flex;gap:10px;margin-top:16px">
+    <div style="display:flex;gap:10px;margin-top:16px;flex-wrap:wrap;align-items:center">
       <button class="btn btn-accent" onclick="processUpload()" id="btnProcess">
         ✦ Process with AI
       </button>
       <button class="btn" onclick="clearUploadFiles()">Clear Files</button>
+      <div style="flex:1"></div>
+      <button class="btn btn-danger" onclick="deleteAllTransactions()" style="margin-left:auto">
+        🗑 Delete All Transactions
+      </button>
     </div>
 
     <div class="ai-status" id="aiStatus" style="display:none">
@@ -2035,6 +2039,18 @@ function fileEmoji(name) {
   if (name.match(/\.pdf$/i)) return '📄';
   if (name.match(/\.(png|jpg|jpeg)$/i)) return '🖼';
   return '📎';
+}
+
+function deleteAllTransactions() {
+  const count = DB.transactions.length;
+  if (count === 0) { showToast('No transactions to delete'); return; }
+  if (!confirm('Delete all ' + count + ' transactions?\n\nThis clears every expense and income transaction for all months. Your account balances, rules, and snapshots are not affected.\n\nYou can re-upload your CSVs to start fresh.')) return;
+  DB.transactions = [];
+  DB.income = {};
+  saveData(DB);
+  renderAll();
+  populateMonthSelectors();
+  showToast(count + ' transactions deleted — ready for fresh upload');
 }
 
 function clearUploadFiles() {
