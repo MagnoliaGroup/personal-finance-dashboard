@@ -1679,7 +1679,11 @@ function editManualEntry(category) {
   `, [
     { label: 'Cancel', cls: 'btn', action: closeModal },
     { label: 'Save', cls: 'btn btn-accent', action: () => {
-      const amt = parseFloat(document.getElementById('manualEntryAmt').value) || 0;
+      // Read value BEFORE closing modal
+      const inputEl = document.getElementById('manualEntryAmt');
+      const amt = inputEl ? (parseFloat(inputEl.value) || 0) : 0;
+
+      closeModal();
 
       // Remove any existing manual entries for this category+year
       DB.transactions = DB.transactions.filter(t =>
@@ -1689,7 +1693,7 @@ function editManualEntry(category) {
       // Add new manual entry dated Jan 1 of current year
       if (amt > 0) {
         DB.transactions.push({
-          id: 'manual_' + category.toLowerCase() + '_' + year,
+          id: 'manual_' + category.toLowerCase() + '_' + year + '_' + Date.now(),
           date: year + '-01-01',
           merchant: category + ' (YTD manual entry)',
           amount: -amt,
@@ -1702,7 +1706,6 @@ function editManualEntry(category) {
       saveData(DB);
       updateMetricsStrip();
       renderOverviewCharts();
-      closeModal();
       showToast(category + ' updated to ' + fmt(amt));
     }}
   ]);
