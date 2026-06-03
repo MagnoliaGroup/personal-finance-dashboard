@@ -714,19 +714,19 @@
         </div>
         <div class="flow-arrow" style="flex:0.5"></div>
         <div class="flow-destinations" id="flowDests">
-          <div class="flow-dest savings">
+          <div class="flow-dest savings" style="cursor:pointer" onclick="showFlowDrill('savings')" title="Click to see details">
             <div><div class="flow-label">Savings</div><div class="flow-pct" id="flowSavingsPct">0%</div></div>
             <div style="text-align:right"><div class="flow-amount" id="flowSavingsAmt" style="color:var(--accent)">$0</div></div>
           </div>
-          <div class="flow-dest expenses">
+          <div class="flow-dest expenses" style="cursor:pointer" onclick="showFlowDrill('expenses')" title="Click to see details">
             <div><div class="flow-label">Expenses</div><div class="flow-pct" id="flowExpensesPct">0%</div></div>
             <div style="text-align:right"><div class="flow-amount" id="flowExpensesAmt" style="color:var(--red)">$0</div></div>
           </div>
-          <div class="flow-dest tax">
+          <div class="flow-dest tax" style="cursor:pointer" onclick="showFlowDrill('tax')" title="Click to see details">
             <div><div class="flow-label">Tax</div><div class="flow-pct" id="flowTaxPct">0%</div></div>
             <div style="text-align:right"><div class="flow-amount" id="flowTaxAmt" style="color:var(--amber)">$0</div></div>
           </div>
-          <div class="flow-dest insurance">
+          <div class="flow-dest insurance" style="cursor:pointer" onclick="showFlowDrill('insurance')" title="Click to see details">
             <div><div class="flow-label">Insurance</div><div class="flow-pct" id="flowInsPct">0%</div></div>
             <div style="text-align:right"><div class="flow-amount" id="flowInsAmt" style="color:var(--blue)">$0</div></div>
           </div>
@@ -1638,6 +1638,78 @@ function clearDrill() {
   currentDrillCategory = null;
   document.getElementById('expDrillTitle').textContent = 'Select a category';
   document.getElementById('expDrillContent').innerHTML = '<div class="empty-state"><div class="empty-icon">👆</div>Click a category to see transactions</div>';
+}
+
+// ═══════════════════════════════════════════════════════
+//  MONEY FLOW DRILL-DOWN
+// ═══════════════════════════════════════════════════════
+function showFlowDrill(type) {
+  const year = new Date().getFullYear();
+  const yearTxs = DB.transactions.filter(t => new Date(t.date).getFullYear() === year);
+
+  let title, txs, color;
+
+  if (type === 'insurance') {
+    title = 'Insurance Transactions — ' + year + ' YTD';
+    txs = yearTxs.filter(t => t.category === 'Insurance');
+    color = 'var(--blue)';
+  } else if (type === 'tax') {
+    title = 'Tax Transactions — ' + year + ' YTD';
+    txs = yearTxs.filter(t => t.category === 'Tax');
+    color = 'var(--amber)';
+  } else if (type === 'expenses') {
+    title = 'All Expense Transactions — ' + year + ' YTD';
+    txs = yearTxs.filter(t => t.amount < 0 && !isTransfer(t) && !isCreditCardPayment(t) && t.category !== 'Tax' && t.category !== 'Insurance');
+    color = 'var(--red)';
+  } else if (type === 'savings') {
+    title = 'Savings — ' + year + ' YTD';
+    const income = getYearIncome(year);
+    const expenses = getYearSpent(year);
+    const tax = yearTxs.filter(t=>t.category==='Tax').reduce((s,t)=>s+Math.abs(t.amount),0);
+    const insurance = yearTxs.filter(t=>t.category==='Insurance').reduce((s,t)=>s+Math.abs(t.amount),0);
+    const savings = income - expenses - tax - insurance;
+    openModal('Savings — ' + year + ' YTD', `
+      <div style="font-size:13px;line-height:2;color:var(--text2)">
+        <div style="display:flex;justify-content:space-between"><span>YTD Income</span><span style="color:var(--accent);font-family:var(--sans);font-weight:700">${fmt(income)}</span></div>
+        <div style="display:flex;justify-content:space-between"><span>− Expenses</span><span style="color:var(--red);font-family:var(--sans);font-weight:700">−${fmt(expenses)}</span></div>
+        <div style="display:flex;justify-content:space-between"><span>− Tax</span><span style="color:var(--amber);font-family:var(--sans);font-weight:700">−${fmt(tax)}</span></div>
+        <div style="display:flex;justify-content:space-between"><span>− Insurance</span><span style="color:var(--blue);font-family:var(--sans);font-weight:700">−${fmt(insurance)}</span></div>
+        <div style="height:1px;background:var(--border);margin:8px 0"></div>
+        <div style="display:flex;justify-content:space-between"><span style="color:var(--text)">= Net Savings</span><span style="color:var(--accent);font-family:var(--sans);font-weight:800;font-size:18px">${fmt(savings)}</span></div>
+      </div>
+    `, [{ label:'Close', cls:'btn', action: closeModal }]);
+    return;
+  }
+
+  txs = txs.sort((a,b) => new Date(b.date) - new Date(a.date));
+  const total = txs.reduce((s,t) => s + Math.abs(t.amount), 0);
+
+  if (txs.length === 0) {
+    openModal(title, '<div class="empty-state">No transactions found for this category</div>',
+      [{ label:'Close', cls:'btn', action: closeModal }]);
+    return;
+  }
+
+  const rows = txs.map(tx => `
+    <tr>
+      <td style="color:var(--text3)">${new Date(tx.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</td>
+      <td>${tx.merchant}</td>
+      <td style="color:${color};font-family:var(--sans);font-weight:700;text-align:right">${fmt(Math.abs(tx.amount))}</td>
+    </tr>
+  `).join('');
+
+  openModal(title, `
+    <div style="max-height:400px;overflow-y:auto">
+      <table class="tx-table" style="width:100%">
+        <thead><tr><th>Date</th><th>Merchant</th><th style="text-align:right">Amount</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)">
+      <span style="font-size:11px;color:var(--text3)">${txs.length} transactions</span>
+      <span style="font-family:var(--sans);font-weight:800;font-size:18px;color:${color}">${fmt(total)}</span>
+    </div>
+  `, [{ label:'Close', cls:'btn', action: closeModal }]);
 }
 
 // ═══════════════════════════════════════════════════════
