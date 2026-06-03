@@ -2146,15 +2146,27 @@ Available categories: ${categories}
 CRITICAL: Return ONLY valid JSON — no markdown, no explanation, no fences. Start with { end with }.
 {"transactions":[{"date":"YYYY-MM-DD","merchant":"string","amount":-12.50,"category":"string","source":"filename"}],"income":{},"account_updates":[],"summary":"N transactions extracted"}
 
-Transaction rules:
-- Sales/purchases: negative amounts (expenses)
-- Returns/refunds: include as POSITIVE amounts with the original merchant name and category
-- Annual fees: include as negative amounts, category = Shopping
-- EXCLUDE entirely: rows where Type=Payment (credit card payments). These are "AUTOMATIC PAYMENT" rows.
-- For Old National CSVs: deposits (positive) = income if not a transfer. source = "on_checking" or "on_savings". Exclude Zelle To, ACH To, Transfer, Online Payment rows.
-- For Chase CSVs: source = "chase". Include ALL Sale, Return, and Fee rows. Exclude Payment rows only.
-- Dates must be YYYY-MM-DD format
-- Extract EVERY row — do not skip, truncate, or summarize`;
+=== CHASE CSV FORMAT ===
+Columns: Transaction Date, Post Date, Description, Category, Type, Amount, Memo
+- Amount is already signed (negative = expense, positive = credit/return)
+- Include: Type=Sale (negative), Type=Return (positive), Type=Fee (negative)
+- EXCLUDE entirely: Type=Payment rows (e.g. "AUTOMATIC PAYMENT")
+- source field = "chase"
+
+=== OLD NATIONAL BANK CSV FORMAT ===
+Columns: Transaction Number, Date, Description, Memo, Amount Debit, Amount Credit, Balance, Check Number
+- Amount Debit column = money OUT (expenses) — use as NEGATIVE number
+- Amount Credit column = money IN (deposits) — use as POSITIVE number
+- If filename contains "checking" set source = "on_checking"; if "savings" set source = "on_savings"
+- INCLUDE as income transactions (positive amount): payroll, direct deposit, BASF AGRICULTURA, DEACONESS HOSPIT PAYROLL, VENMO CASHOUT, Mobile Deposit, tax refunds, any Amount Credit entry that is not a transfer
+- EXCLUDE entirely — do not add to transactions array: rows where Description or Memo contains any of: TRANSFER, INT TXFR, ZELLE TO, ACH TO, ONLINE PMT, DISCOVER E-PAYMENT, TRUIST MORTG, CHASE PAYMENT, AUTOMATIC PAYMENT
+- For Old National debits (expenses): include as negative amount with appropriate category
+- Convert Old National dates from MM/DD/YYYY to YYYY-MM-DD
+
+=== GENERAL RULES ===
+- merchant = Description column value (trim whitespace)
+- Extract EVERY qualifying row — do not skip or truncate
+- income object in response: always return as {}  (income is read from transactions directly)`;
 
     for (let i = 0; i < rowBatches.length; i++) {
       const batch = rowBatches[i];
@@ -2245,7 +2257,7 @@ For investment screenshots: extract the total account value as balance.`;
   document.getElementById('aiSummaryText').textContent =
     (summaries.join('\n') || 'Processing complete.') +
     `\n\n• ${unique.length} new transactions imported (${newTxs.length - unique.length} duplicates skipped)` +
-    `\n• Income: ${Object.keys(allIncome).map(k=>monthLabel(k)+' '+fmt(allIncome[k])).join(', ')||'none found — upload pay stub as a screenshot (PNG/JPG)'}` +
+    `\n• Income transactions found: ${unique.filter(t => t.amount > 0 && (t.source === 'on_checking' || t.source === 'on_savings')).length} deposits from Old National accounts` +
     `\n• Account updates: ${allAccountUpdates.map(a=>`${a.name||a.id}: ${fmt(a.balance)}`).join(', ')||'none'}`;
 
   renderAll();
