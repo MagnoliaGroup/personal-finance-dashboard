@@ -722,25 +722,13 @@
             <div><div class="flow-label">Expenses</div><div class="flow-pct" id="flowExpensesPct">0%</div></div>
             <div style="text-align:right"><div class="flow-amount" id="flowExpensesAmt" style="color:var(--red)">$0</div></div>
           </div>
-          <div class="flow-dest tax" onclick="showFlowDrill('tax')" style="cursor:pointer" title="Click to view transactions">
-            <div><div class="flow-label">Tax</div><div class="flow-pct" id="flowTaxPct">0%</div></div>
-            <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-              <div class="flow-amount" id="flowTaxAmt" style="color:var(--amber)">$0</div>
-            </div>
+          <div class="flow-dest tax" onclick="showFlowDrill('tax')" style="cursor:pointer" title="Click to add/view transactions">
+            <div><div class="flow-label">Tax</div><div class="flow-pct" id="flowTaxPct">0% · click to manage</div></div>
+            <div style="text-align:right"><div class="flow-amount" id="flowTaxAmt" style="color:var(--amber)">$0</div></div>
           </div>
-          <div style="display:flex;gap:6px;align-items:center;margin:-4px 0">
-            <span style="font-size:10px;color:var(--text3)">Set YTD Tax:</span>
-            <button class="btn btn-sm" style="padding:3px 10px;font-size:10px" onclick="editManualEntry('Tax')">✎ Edit</button>
-          </div>
-          <div class="flow-dest insurance" onclick="showFlowDrill('insurance')" style="cursor:pointer" title="Click to view transactions">
-            <div><div class="flow-label">Insurance</div><div class="flow-pct" id="flowInsPct">0%</div></div>
-            <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px">
-              <div class="flow-amount" id="flowInsAmt" style="color:var(--blue)">$0</div>
-            </div>
-          </div>
-          <div style="display:flex;gap:6px;align-items:center;margin:-4px 0">
-            <span style="font-size:10px;color:var(--text3)">Set YTD Insurance:</span>
-            <button class="btn btn-sm" style="padding:3px 10px;font-size:10px" onclick="editManualEntry('Insurance')">✎ Edit</button>
+          <div class="flow-dest insurance" onclick="showFlowDrill('insurance')" style="cursor:pointer" title="Click to add/view transactions">
+            <div><div class="flow-label">Insurance</div><div class="flow-pct" id="flowInsPct">0% · click to manage</div></div>
+            <div style="text-align:right"><div class="flow-amount" id="flowInsAmt" style="color:var(--blue)">$0</div></div>
           </div>
         </div>
       </div>
@@ -1706,14 +1694,123 @@ function showFlowDrill(type) {
 
   let title, txs, color;
 
-  if (type === 'insurance') {
-    title = 'Insurance Transactions — ' + year + ' YTD';
-    txs = yearTxs.filter(t => t.category === 'Insurance');
-    color = 'var(--blue)';
-  } else if (type === 'tax') {
-    title = 'Tax Transactions — ' + year + ' YTD';
-    txs = yearTxs.filter(t => t.category === 'Tax');
-    color = 'var(--amber)';
+  if (type === 'insurance' || type === 'tax') {
+    const category = type === 'insurance' ? 'Insurance' : 'Tax';
+    color = type === 'insurance' ? 'var(--blue)' : 'var(--amber)';
+    title = category + ' — ' + year + ' YTD';
+    txs = yearTxs.filter(t => t.category === category).sort((a,b) => new Date(b.date)-new Date(a.date));
+    const total = txs.reduce((s,t) => s + Math.abs(t.amount), 0);
+
+    document.getElementById('modalTitle').textContent = title;
+    const body = document.getElementById('modalBody');
+    body.innerHTML = '';
+
+    function rebuildBody() {
+      body.innerHTML = '';
+      const currentTxs = DB.transactions.filter(t =>
+        new Date(t.date).getFullYear() === year && t.category === category
+      ).sort((a,b) => new Date(b.date)-new Date(a.date));
+      const currentTotal = currentTxs.reduce((s,t) => s + Math.abs(t.amount), 0);
+
+      // Add form
+      const addForm = document.createElement('div');
+      addForm.style.cssText = 'display:flex;gap:8px;margin-bottom:16px;align-items:flex-end';
+      addForm.innerHTML = `
+        <div style="flex:1">
+          <label style="font-size:10px;color:var(--text3);display:block;margin-bottom:4px">Description</label>
+          <input type="text" id="flowAddDesc" placeholder="e.g. Federal Tax Q1" style="width:100%">
+        </div>
+        <div style="width:130px">
+          <label style="font-size:10px;color:var(--text3);display:block;margin-bottom:4px">Amount</label>
+          <input type="number" id="flowAddAmt" placeholder="0.00" step="0.01" style="width:100%">
+        </div>
+        <button class="btn btn-accent btn-sm" id="flowAddBtn">+ Add</button>
+      `;
+      body.appendChild(addForm);
+
+      // Wire up add button
+      document.getElementById('flowAddBtn').onclick = () => {
+        const desc = document.getElementById('flowAddDesc').value.trim() || category + ' payment';
+        const amt = parseFloat(document.getElementById('flowAddAmt').value);
+        if (isNaN(amt) || amt <= 0) { showToast('Enter a valid amount'); return; }
+        DB.transactions.push({
+          id: 'tx_manual_' + Date.now(),
+          date: new Date().toISOString().slice(0,10),
+          merchant: desc,
+          amount: -amt,
+          category: category,
+          source: 'manual',
+          isManual: true
+        });
+        saveData(DB);
+        updateMetricsStrip();
+        renderOverviewCharts();
+        rebuildBody();
+        showToast(category + ' entry added');
+      };
+
+      // Transaction list
+      if (currentTxs.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'empty-state';
+        empty.innerHTML = '<div style="padding:20px;color:var(--text3)">No entries yet — add one above</div>';
+        body.appendChild(empty);
+      } else {
+        const table = document.createElement('table');
+        table.className = 'tx-table';
+        table.style.width = '100%';
+        table.innerHTML = '<thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th><th></th></tr></thead>';
+        const tbody = document.createElement('tbody');
+        currentTxs.forEach(tx => {
+          const tr = document.createElement('tr');
+          const tdDate = document.createElement('td');
+          tdDate.style.color = 'var(--text3)';
+          tdDate.textContent = new Date(tx.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+          const tdDesc = document.createElement('td');
+          tdDesc.textContent = tx.merchant;
+          const tdAmt = document.createElement('td');
+          tdAmt.style.cssText = 'color:' + color + ';font-family:var(--sans);font-weight:700;text-align:right';
+          tdAmt.textContent = fmt(Math.abs(tx.amount));
+          const tdDel = document.createElement('td');
+          const delBtn = document.createElement('button');
+          delBtn.className = 'btn btn-sm btn-danger';
+          delBtn.textContent = 'Delete';
+          delBtn.onclick = () => {
+            DB.transactions = DB.transactions.filter(t => t.id !== tx.id);
+            saveData(DB);
+            updateMetricsStrip();
+            renderOverviewCharts();
+            rebuildBody();
+          };
+          tdDel.appendChild(delBtn);
+          tr.appendChild(tdDate); tr.appendChild(tdDesc); tr.appendChild(tdAmt); tr.appendChild(tdDel);
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        const scrollDiv = document.createElement('div');
+        scrollDiv.style.cssText = 'max-height:300px;overflow-y:auto';
+        scrollDiv.appendChild(table);
+        body.appendChild(scrollDiv);
+
+        const footer = document.createElement('div');
+        footer.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)';
+        footer.innerHTML = '<span style="font-size:11px;color:var(--text3)">' + currentTxs.length + ' entries</span>' +
+          '<span style="font-family:var(--sans);font-weight:800;font-size:18px;color:' + color + '">' + fmt(currentTotal) + '</span>';
+        body.appendChild(footer);
+      }
+    }
+
+    rebuildBody();
+    const modalFooter = document.getElementById('modalFooter');
+    modalFooter.innerHTML = '';
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'btn';
+    closeBtn.textContent = 'Close';
+    closeBtn.onclick = closeModal;
+    modalFooter.appendChild(closeBtn);
+    document.getElementById('modalOverlay').classList.add('open');
+    return;
+
   } else if (type === 'expenses') {
     title = 'All Expense Transactions — ' + year + ' YTD';
     txs = yearTxs.filter(t => t.amount < 0 && !isTransfer(t) && !isCreditCardPayment(t) && t.category !== 'Tax' && t.category !== 'Insurance');
