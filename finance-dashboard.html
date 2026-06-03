@@ -722,25 +722,25 @@
             <div><div class="flow-label">Expenses</div><div class="flow-pct" id="flowExpensesPct">0%</div></div>
             <div style="text-align:right"><div class="flow-amount" id="flowExpensesAmt" style="color:var(--red)">$0</div></div>
           </div>
-          <div class="flow-dest tax" style="cursor:pointer" onclick="showFlowDrill('tax')" title="Click to see details">
-            <div>
-              <div style="display:flex;align-items:center;gap:6px">
-                <div class="flow-label">Tax</div>
-                <span onclick="event.stopPropagation();editManualEntry('Tax')" title="Set YTD amount" style="font-size:11px;color:var(--text3);cursor:pointer;padding:1px 4px;border-radius:3px;border:1px solid var(--border)">✎</span>
-              </div>
-              <div class="flow-pct" id="flowTaxPct">0%</div>
+          <div class="flow-dest tax" onclick="showFlowDrill('tax')" style="cursor:pointer" title="Click to view transactions">
+            <div><div class="flow-label">Tax</div><div class="flow-pct" id="flowTaxPct">0%</div></div>
+            <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+              <div class="flow-amount" id="flowTaxAmt" style="color:var(--amber)">$0</div>
             </div>
-            <div style="text-align:right"><div class="flow-amount" id="flowTaxAmt" style="color:var(--amber)">$0</div></div>
           </div>
-          <div class="flow-dest insurance" style="cursor:pointer" onclick="showFlowDrill('insurance')" title="Click to see details">
-            <div>
-              <div style="display:flex;align-items:center;gap:6px">
-                <div class="flow-label">Insurance</div>
-                <span onclick="event.stopPropagation();editManualEntry('Insurance')" title="Set YTD amount" style="font-size:11px;color:var(--text3);cursor:pointer;padding:1px 4px;border-radius:3px;border:1px solid var(--border)">✎</span>
-              </div>
-              <div class="flow-pct" id="flowInsPct">0%</div>
+          <div style="display:flex;gap:6px;align-items:center;margin:-4px 0">
+            <span style="font-size:10px;color:var(--text3)">Set YTD Tax:</span>
+            <button class="btn btn-sm" style="padding:3px 10px;font-size:10px" onclick="editManualEntry('Tax')">✎ Edit</button>
+          </div>
+          <div class="flow-dest insurance" onclick="showFlowDrill('insurance')" style="cursor:pointer" title="Click to view transactions">
+            <div><div class="flow-label">Insurance</div><div class="flow-pct" id="flowInsPct">0%</div></div>
+            <div style="text-align:right;display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+              <div class="flow-amount" id="flowInsAmt" style="color:var(--blue)">$0</div>
             </div>
-            <div style="text-align:right"><div class="flow-amount" id="flowInsAmt" style="color:var(--blue)">$0</div></div>
+          </div>
+          <div style="display:flex;gap:6px;align-items:center;margin:-4px 0">
+            <span style="font-size:10px;color:var(--text3)">Set YTD Insurance:</span>
+            <button class="btn btn-sm" style="padding:3px 10px;font-size:10px" onclick="editManualEntry('Insurance')">✎ Edit</button>
           </div>
         </div>
       </div>
@@ -1672,25 +1672,29 @@ function editManualEntry(category) {
   `, [
     { label: 'Cancel', cls: 'btn', action: closeModal },
     { label: 'Save', cls: 'btn btn-accent', action: () => {
-      const amt = parseFloat(document.getElementById('editBalance').value) || 0;
+      const el = document.getElementById('editBalance');
+      const raw = el ? el.value : '';
+      const amt = parseFloat(raw);
+      if (isNaN(amt) || amt <= 0) {
+        showToast('Please enter a valid amount');
+        return;
+      }
       DB.transactions = DB.transactions.filter(t =>
         !(t.isManual && t.category === category && new Date(t.date).getFullYear() === year)
       );
-      if (amt > 0) {
-        DB.transactions.push({
-          id: 'manual_' + category.toLowerCase() + '_' + year,
-          date: year + '-01-01',
-          merchant: category + ' (YTD manual entry)',
-          amount: -amt,
-          category: category,
-          source: 'manual',
-          isManual: true
-        });
-      }
+      DB.transactions.push({
+        id: 'manual_' + category.toLowerCase() + '_' + year,
+        date: year + '-01-01',
+        merchant: category + ' (YTD manual entry)',
+        amount: -amt,
+        category: category,
+        source: 'manual',
+        isManual: true
+      });
       saveData(DB);
+      closeModal();
       updateMetricsStrip();
       renderOverviewCharts();
-      closeModal();
       showToast(category + ' updated to ' + fmt(amt));
     }}
   ]);
