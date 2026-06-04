@@ -299,14 +299,15 @@
 
   .flow-mid {
     position: relative;
-    flex: 0 0 100px;
+    flex: 0 0 80px;
     align-self: stretch;
+    min-height: 20px;
   }
 
   .flow-mid svg {
+    display: block;
     position: absolute;
     top: 0; left: 0;
-    width: 100%; height: 100%;
     overflow: visible;
   }
 
@@ -1399,38 +1400,59 @@ function drawFlowLines(flowBoxes) {
   const src  = document.querySelector('.flow-source');
   const mid  = document.getElementById('flowMid');
   const svg  = document.getElementById('flowSvg');
-  if (!src || !mid || !svg) return;
+  const dests = document.getElementById('flowDests');
+  if (!src || !mid || !svg || !dests) return;
+
+  // Use offsetHeight/offsetTop for layout-relative positioning, not getBoundingClientRect
+  // The SVG sits in .flow-mid which is between source and dests in the flex row
+  // We need the source midY and each dest box midY, all relative to .flow-mid top
+
+  const layout = document.getElementById('moneyFlow');
+  const layoutTop = layout.getBoundingClientRect().top;
 
   const midRect = mid.getBoundingClientRect();
   const srcRect = src.getBoundingClientRect();
-  if (midRect.height === 0) return;
+  const w = midRect.width;
+  const h = mid.offsetHeight;
 
+  if (w === 0 || h === 0) return;
+
+  // Source connects from its RIGHT edge center
   const srcMidY = srcRect.top + srcRect.height / 2 - midRect.top;
-  const x0 = midRect.width;
+
+  // x0 = right side of mid (touching source) = w
+  // x1 = left side of mid (touching dests) = 0
+  const x0 = w;
   const x1 = 0;
-  const totalIncome = flowBoxes.reduce((s,b) => s + b.value, 0) || 1;
 
-  svg.setAttribute('viewBox', '0 0 ' + midRect.width + ' ' + midRect.height);
-  svg.setAttribute('preserveAspectRatio', 'none');
+  const totalVal = flowBoxes.reduce((s,b) => s + b.value, 0) || 1;
+  const destBoxEls = document.querySelectorAll('#flowDests .flow-dest');
 
-  const destBoxes = document.querySelectorAll('#flowDests .flow-dest');
+  svg.setAttribute('width', w);
+  svg.setAttribute('height', h);
+  svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+
   let paths = '';
 
-  destBoxes.forEach((box, i) => {
+  destBoxEls.forEach((box, i) => {
     if (i >= flowBoxes.length) return;
     const fb = flowBoxes[i];
     const boxRect = box.getBoundingClientRect();
     const destMidY = boxRect.top + boxRect.height / 2 - midRect.top;
-    const sw = Math.max(1.5, (fb.value / totalIncome) * 18);
-    const cx1 = x0 * 0.6;
-    const cx2 = x0 * 0.4;
-    // Extract raw color hex from fb.color
-    const col = fb.color;
-    paths += '<path d="M' + x0 + ',' + srcMidY + ' C' + cx1 + ',' + srcMidY + ' ' + cx2 + ',' + destMidY + ' ' + x1 + ',' + destMidY + '" fill="none" stroke="' + col + '" stroke-width="' + sw.toFixed(1) + '" stroke-opacity="0.45" stroke-linecap="round"/>';
-    paths += '<circle cx="' + x1 + '" cy="' + destMidY + '" r="3" fill="' + col + '" fill-opacity="0.7"/>';
+    const sw = Math.max(1.5, (fb.value / totalVal) * 16);
+    // Cubic bezier: start horizontal from source, arrive horizontal at dest
+    const cx1 = x0 * 0.5;
+    const cx2 = x0 * 0.5;
+    paths += '<path d="M' + x0 + ',' + srcMidY.toFixed(1) +
+      ' C' + cx1.toFixed(1) + ',' + srcMidY.toFixed(1) +
+      ' ' + cx2.toFixed(1) + ',' + destMidY.toFixed(1) +
+      ' ' + x1 + ',' + destMidY.toFixed(1) + '"' +
+      ' fill="none" stroke="' + fb.color + '" stroke-width="' + sw.toFixed(1) +
+      '" stroke-opacity="0.5" stroke-linecap="round"/>';
+    paths += '<circle cx="' + x1 + '" cy="' + destMidY.toFixed(1) + '" r="3" fill="' + fb.color + '" fill-opacity="0.8"/>';
   });
 
-  paths += '<circle cx="' + x0 + '" cy="' + srcMidY + '" r="4" fill="#4ade80" fill-opacity="0.6"/>';
+  paths += '<circle cx="' + x0 + '" cy="' + srcMidY.toFixed(1) + '" r="4" fill="#4ade80" fill-opacity="0.7"/>';
   svg.innerHTML = paths;
 }
 
