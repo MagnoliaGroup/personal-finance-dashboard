@@ -279,63 +279,57 @@
   }
 
   /* ── MONEY FLOW ── */
-  .flow-container {
+  .flow-layout {
     display: flex;
     align-items: center;
     gap: 0;
     padding: 16px 0;
-    overflow-x: auto;
   }
 
   .flow-source {
     background: var(--accent-dim);
     border: 1px solid rgba(74,222,128,0.25);
     border-radius: 8px;
-    padding: 16px 20px;
+    padding: 14px 18px;
     text-align: center;
-    min-width: 120px;
+    min-width: 130px;
+    flex-shrink: 0;
+    cursor: pointer;
   }
 
-  .flow-arrow {
-    flex: 1;
-    height: 2px;
-    background: linear-gradient(90deg, rgba(74,222,128,0.3), rgba(74,222,128,0.1));
+  .flow-mid {
     position: relative;
-    margin: 0 4px;
-    min-width: 40px;
+    flex: 0 0 100px;
+    align-self: stretch;
   }
-  .flow-arrow::after {
-    content: '›';
+
+  .flow-mid svg {
     position: absolute;
-    right: -6px;
-    top: 50%;
-    transform: translateY(-50%);
-    color: rgba(74,222,128,0.4);
-    font-size: 16px;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    overflow: visible;
   }
 
   .flow-destinations {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
+    flex: 1;
   }
 
   .flow-dest {
-    padding: 12px 16px;
+    padding: 10px 14px;
     border-radius: 8px;
     border: 1px solid var(--border);
     background: var(--bg3);
     display: flex;
     justify-content: space-between;
     align-items: center;
-    gap: 20px;
-    min-width: 200px;
+    gap: 16px;
+    cursor: pointer;
+    transition: border-color 0.15s;
   }
-
-  .flow-dest.savings { border-color: rgba(74,222,128,0.3); background: var(--accent-dim); }
-  .flow-dest.expenses { border-color: rgba(248,113,113,0.3); background: var(--red-dim); }
-  .flow-dest.tax { border-color: rgba(251,191,36,0.3); background: rgba(251,191,36,0.08); }
-  .flow-dest.insurance { border-color: rgba(96,165,250,0.3); background: var(--blue-dim); }
+  .flow-dest:hover { border-color: var(--border2); }
 
   .flow-label { font-size: 11px; color: var(--text2); }
   .flow-amount { font-family: var(--sans); font-size: 15px; font-weight: 700; }
@@ -707,13 +701,15 @@
       <div class="card-header">
         <div><div class="card-title">Money Flow</div><div class="card-sub" id="flowMonthLabel">This month</div></div>
       </div>
-      <div class="flow-container" id="moneyFlow">
-        <div class="flow-source" onclick="showFlowDrill('grossIncome')" style="cursor:pointer" title="Click to manage gross income">
-          <div class="flow-label" style="font-size:10px;color:var(--text3);margin-bottom:4px">GROSS INCOME</div>
-          <div class="flow-amount" id="flowIncome" style="font-family:var(--sans);font-size:22px;font-weight:800">$0</div>
-          <div style="font-size:9px;color:rgba(74,222,128,0.5);margin-top:4px">click to manage</div>
+      <div class="flow-layout" id="moneyFlow">
+        <div class="flow-source" onclick="showFlowDrill('grossIncome')" title="Click to manage gross income">
+          <div style="font-size:9px;color:rgba(74,222,128,0.5);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Gross Income</div>
+          <div id="flowIncome" style="font-family:var(--sans);font-size:22px;font-weight:800;color:var(--accent);letter-spacing:-1px;line-height:1">$0</div>
+          <div style="font-size:9px;color:rgba(74,222,128,0.3);margin-top:4px">click to manage</div>
         </div>
-        <div class="flow-arrow" style="flex:0.5"></div>
+        <div class="flow-mid" id="flowMid">
+          <svg id="flowSvg"></svg>
+        </div>
         <div class="flow-destinations" id="flowDests"></div>
       </div>
     </div>
@@ -1277,16 +1273,16 @@ function renderOverviewCharts() {
 
   // Define all flow boxes with their values
   const flowBoxes = [
-    { label:'Savings', value:savings, pct:pct(savings), color:'var(--accent)', type:'savings',
-      style:'', clickable:true, subtitle:'' },
-    { label:'Expenses', value:expenses, pct:pct(expenses), color:'var(--red)', type:'expenses',
-      style:'', clickable:true, subtitle:'' },
-    { label:'Tax', value:tax, pct:pct(tax), color:'var(--amber)', type:'tax',
-      style:'border-color:rgba(251,191,36,0.3);background:rgba(251,191,36,0.08)', clickable:true, subtitle:' · click to manage' },
-    { label:'Insurance', value:insurance, pct:pct(insurance), color:'var(--blue)', type:'insurance',
-      style:'border-color:rgba(96,165,250,0.3);background:rgba(96,165,250,0.08)', clickable:true, subtitle:' · click to manage' },
-    { label:'Long Term Investments', value:ltInvestments, pct:pct(ltInvestments), color:'var(--purple)', type:'investments',
-      style:'border-color:rgba(167,139,250,0.3);background:rgba(167,139,250,0.08)', clickable:true, subtitle:' · click to manage' },
+    { label:'Savings', value:savings, pct:pct(savings), color:'#4ade80', labelColor:'#9ae6b4', type:'savings',
+      style:'border-color:rgba(74,222,128,0.3);background:rgba(74,222,128,0.07)', subtitle:'' },
+    { label:'Expenses', value:expenses, pct:pct(expenses), color:'#f87171', labelColor:'#fca5a5', type:'expenses',
+      style:'border-color:rgba(248,113,113,0.3);background:rgba(248,113,113,0.07)', subtitle:'' },
+    { label:'Tax', value:tax, pct:pct(tax), color:'#fbbf24', labelColor:'#fcd34d', type:'tax',
+      style:'border-color:rgba(251,191,36,0.3);background:rgba(251,191,36,0.07)', subtitle:' · click to manage' },
+    { label:'Insurance', value:insurance, pct:pct(insurance), color:'#60a5fa', labelColor:'#93c5fd', type:'insurance',
+      style:'border-color:rgba(96,165,250,0.3);background:rgba(96,165,250,0.07)', subtitle:' · click to manage' },
+    { label:'Long Term Investments', value:ltInvestments, pct:pct(ltInvestments), color:'#a78bfa', labelColor:'#c4b5fd', type:'investments',
+      style:'border-color:rgba(167,139,250,0.3);background:rgba(167,139,250,0.07)', subtitle:' · click to manage' },
   ];
 
   // Sort largest to smallest by value
@@ -1298,16 +1294,18 @@ function renderOverviewCharts() {
   flowBoxes.forEach(box => {
     const div = document.createElement('div');
     div.className = 'flow-dest';
-    if (box.style) div.setAttribute('style', 'cursor:pointer;' + box.style);
-    else div.style.cursor = 'pointer';
+    div.style.cssText = (box.style || '') + ';cursor:pointer';
     div.title = 'Click to ' + (box.subtitle ? 'manage' : 'see details');
     div.onclick = () => showFlowDrill(box.type);
     div.innerHTML =
-      '<div><div class="flow-label">' + box.label + '</div>' +
+      '<div><div class="flow-label" style="color:' + box.labelColor + '">' + box.label + '</div>' +
       '<div style="font-size:10px;color:var(--text3)">' + box.pct + '%' + box.subtitle + '</div></div>' +
       '<div style="text-align:right"><div style="font-family:var(--sans);font-size:15px;font-weight:700;color:' + box.color + '">' + fmt(box.value) + '</div></div>';
     dests.appendChild(div);
   });
+
+  // Draw SVG flow lines after DOM settles
+  requestAnimationFrame(() => drawFlowLines(flowBoxes));
 
   // Net worth trend (from snapshots)
   const snaps = [...DB.snapshots].reverse().slice(-12);
@@ -1395,6 +1393,45 @@ function renderOverviewCharts() {
       }
     }
   });
+}
+
+function drawFlowLines(flowBoxes) {
+  const src  = document.querySelector('.flow-source');
+  const mid  = document.getElementById('flowMid');
+  const svg  = document.getElementById('flowSvg');
+  if (!src || !mid || !svg) return;
+
+  const midRect = mid.getBoundingClientRect();
+  const srcRect = src.getBoundingClientRect();
+  if (midRect.height === 0) return;
+
+  const srcMidY = srcRect.top + srcRect.height / 2 - midRect.top;
+  const x0 = midRect.width;
+  const x1 = 0;
+  const totalIncome = flowBoxes.reduce((s,b) => s + b.value, 0) || 1;
+
+  svg.setAttribute('viewBox', '0 0 ' + midRect.width + ' ' + midRect.height);
+  svg.setAttribute('preserveAspectRatio', 'none');
+
+  const destBoxes = document.querySelectorAll('#flowDests .flow-dest');
+  let paths = '';
+
+  destBoxes.forEach((box, i) => {
+    if (i >= flowBoxes.length) return;
+    const fb = flowBoxes[i];
+    const boxRect = box.getBoundingClientRect();
+    const destMidY = boxRect.top + boxRect.height / 2 - midRect.top;
+    const sw = Math.max(1.5, (fb.value / totalIncome) * 18);
+    const cx1 = x0 * 0.6;
+    const cx2 = x0 * 0.4;
+    // Extract raw color hex from fb.color
+    const col = fb.color;
+    paths += '<path d="M' + x0 + ',' + srcMidY + ' C' + cx1 + ',' + srcMidY + ' ' + cx2 + ',' + destMidY + ' ' + x1 + ',' + destMidY + '" fill="none" stroke="' + col + '" stroke-width="' + sw.toFixed(1) + '" stroke-opacity="0.45" stroke-linecap="round"/>';
+    paths += '<circle cx="' + x1 + '" cy="' + destMidY + '" r="3" fill="' + col + '" fill-opacity="0.7"/>';
+  });
+
+  paths += '<circle cx="' + x0 + '" cy="' + srcMidY + '" r="4" fill="#4ade80" fill-opacity="0.6"/>';
+  svg.innerHTML = paths;
 }
 
 function lineOpts({prefix=''}) {
