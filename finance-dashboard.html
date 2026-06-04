@@ -702,16 +702,15 @@
       <div class="card-header">
         <div><div class="card-title">Money Flow</div><div class="card-sub" id="flowMonthLabel">This month</div></div>
       </div>
-      <div class="flow-layout" id="moneyFlow">
-        <div class="flow-source" onclick="showFlowDrill('grossIncome')" title="Click to manage gross income">
+      <div class="flow-layout" id="moneyFlow" style="position:relative">
+        <div class="flow-source" id="flowSrc" onclick="showFlowDrill('grossIncome')" title="Click to manage gross income">
           <div style="font-size:9px;color:rgba(74,222,128,0.5);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Gross Income</div>
           <div id="flowIncome" style="font-family:var(--sans);font-size:22px;font-weight:800;color:var(--accent);letter-spacing:-1px;line-height:1">$0</div>
           <div style="font-size:9px;color:rgba(74,222,128,0.3);margin-top:4px">click to manage</div>
         </div>
-        <div class="flow-mid" id="flowMid">
-          <svg id="flowSvg"></svg>
-        </div>
+        <div style="flex:0 0 80px;position:relative;align-self:stretch"></div>
         <div class="flow-destinations" id="flowDests"></div>
+        <svg id="flowSvg" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;overflow:visible"></svg>
       </div>
     </div>
 
@@ -1397,40 +1396,20 @@ function renderOverviewCharts() {
 }
 
 function drawFlowLines(flowBoxes) {
-  const src  = document.querySelector('.flow-source');
-  const mid  = document.getElementById('flowMid');
-  const svg  = document.getElementById('flowSvg');
-  const dests = document.getElementById('flowDests');
-  if (!src || !mid || !svg || !dests) return;
+  const svg     = document.getElementById('flowSvg');
+  const src     = document.getElementById('flowSrc');
+  const layout  = document.getElementById('moneyFlow');
+  if (!svg || !src || !layout) return;
 
-  // Use offsetHeight/offsetTop for layout-relative positioning, not getBoundingClientRect
-  // The SVG sits in .flow-mid which is between source and dests in the flex row
-  // We need the source midY and each dest box midY, all relative to .flow-mid top
+  const layoutRect = layout.getBoundingClientRect();
+  const srcRect    = src.getBoundingClientRect();
 
-  const layout = document.getElementById('moneyFlow');
-  const layoutTop = layout.getBoundingClientRect().top;
+  // Source: right edge center, relative to layout
+  const x0 = srcRect.right - layoutRect.left;
+  const y0 = srcRect.top + srcRect.height / 2 - layoutRect.top;
 
-  const midRect = mid.getBoundingClientRect();
-  const srcRect = src.getBoundingClientRect();
-  const w = midRect.width;
-  const h = mid.offsetHeight;
-
-  if (w === 0 || h === 0) return;
-
-  // Source connects from its RIGHT edge center
-  const srcMidY = srcRect.top + srcRect.height / 2 - midRect.top;
-
-  // x0 = right side of mid (touching source) = w
-  // x1 = left side of mid (touching dests) = 0
-  const x0 = w;
-  const x1 = 0;
-
-  const totalVal = flowBoxes.reduce((s,b) => s + b.value, 0) || 1;
   const destBoxEls = document.querySelectorAll('#flowDests .flow-dest');
-
-  svg.setAttribute('width', w);
-  svg.setAttribute('height', h);
-  svg.setAttribute('viewBox', '0 0 ' + w + ' ' + h);
+  const totalVal = flowBoxes.reduce((s,b) => s + b.value, 0) || 1;
 
   let paths = '';
 
@@ -1438,21 +1417,23 @@ function drawFlowLines(flowBoxes) {
     if (i >= flowBoxes.length) return;
     const fb = flowBoxes[i];
     const boxRect = box.getBoundingClientRect();
-    const destMidY = boxRect.top + boxRect.height / 2 - midRect.top;
+    // Destination: left edge center, relative to layout
+    const x1 = boxRect.left - layoutRect.left;
+    const y1 = boxRect.top + boxRect.height / 2 - layoutRect.top;
     const sw = Math.max(1.5, (fb.value / totalVal) * 16);
-    // Cubic bezier: start horizontal from source, arrive horizontal at dest
-    const cx1 = x0 * 0.5;
-    const cx2 = x0 * 0.5;
-    paths += '<path d="M' + x0 + ',' + srcMidY.toFixed(1) +
-      ' C' + cx1.toFixed(1) + ',' + srcMidY.toFixed(1) +
-      ' ' + cx2.toFixed(1) + ',' + destMidY.toFixed(1) +
-      ' ' + x1 + ',' + destMidY.toFixed(1) + '"' +
+    // Control points: both pulled to midpoint X so curves fan out nicely
+    const mx = (x0 + x1) / 2;
+    paths += '<path d="M' + x0.toFixed(1) + ',' + y0.toFixed(1) +
+      ' C' + mx.toFixed(1) + ',' + y0.toFixed(1) +
+      ' ' + mx.toFixed(1) + ',' + y1.toFixed(1) +
+      ' ' + x1.toFixed(1) + ',' + y1.toFixed(1) + '"' +
       ' fill="none" stroke="' + fb.color + '" stroke-width="' + sw.toFixed(1) +
-      '" stroke-opacity="0.5" stroke-linecap="round"/>';
-    paths += '<circle cx="' + x1 + '" cy="' + destMidY.toFixed(1) + '" r="3" fill="' + fb.color + '" fill-opacity="0.8"/>';
+      '" stroke-opacity="0.45" stroke-linecap="round"/>';
+    paths += '<circle cx="' + x1.toFixed(1) + '" cy="' + y1.toFixed(1) + '" r="3" fill="' + fb.color + '" fill-opacity="0.8"/>';
   });
 
-  paths += '<circle cx="' + x0 + '" cy="' + srcMidY.toFixed(1) + '" r="4" fill="#4ade80" fill-opacity="0.7"/>';
+  // Dot on source right edge
+  paths += '<circle cx="' + x0.toFixed(1) + '" cy="' + y0.toFixed(1) + '" r="4" fill="#4ade80" fill-opacity="0.7"/>';
   svg.innerHTML = paths;
 }
 
