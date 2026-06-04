@@ -708,9 +708,10 @@
         <div><div class="card-title">Money Flow</div><div class="card-sub" id="flowMonthLabel">This month</div></div>
       </div>
       <div class="flow-container" id="moneyFlow">
-        <div class="flow-source">
-          <div class="flow-label" style="font-size:10px;color:var(--text3);margin-bottom:4px">INCOME</div>
+        <div class="flow-source" onclick="showFlowDrill('grossIncome')" style="cursor:pointer" title="Click to manage gross income">
+          <div class="flow-label" style="font-size:10px;color:var(--text3);margin-bottom:4px">GROSS INCOME</div>
           <div class="flow-amount" id="flowIncome" style="font-family:var(--sans);font-size:22px;font-weight:800">$0</div>
+          <div style="font-size:9px;color:rgba(74,222,128,0.5);margin-top:4px">click to manage</div>
         </div>
         <div class="flow-arrow" style="flex:0.5"></div>
         <div class="flow-destinations" id="flowDests"></div>
@@ -1075,6 +1076,18 @@ function getMonthIncome(ym) {
     .reduce((s,t) => s + t.amount, 0);
 }
 
+function getGrossIncome(year) {
+  // Manual gross income entries from paycheck stubs
+  return DB.transactions
+    .filter(t => t.category === 'Gross Income' && new Date(t.date).getFullYear() === year)
+    .reduce((s,t) => s + Math.abs(t.amount), 0);
+}
+
+function getGrossIncomeOrFallback(year) {
+  const gross = getGrossIncome(year);
+  return gross > 0 ? gross : getYearIncome(year);
+}
+
 function getYearIncome(year) {
   return DB.transactions
     .filter(t => new Date(t.date).getFullYear() === year
@@ -1249,7 +1262,7 @@ function renderOverviewCharts() {
 
   // Money flow — YTD
   const flowYear = new Date().getFullYear();
-  const income = getYearIncome(flowYear);
+  const income = getGrossIncomeOrFallback(flowYear);
   const yearTxs = DB.transactions.filter(t => new Date(t.date).getFullYear() === flowYear);
   const tax = yearTxs.filter(t=>t.category==='Tax').reduce((s,t)=>s+Math.abs(t.amount),0);
   const insurance = yearTxs.filter(t=>t.category==='Insurance').reduce((s,t)=>s+Math.abs(t.amount),0);
@@ -1706,7 +1719,114 @@ function showFlowDrill(type) {
 
   let title, txs, color;
 
-  if (type === 'insurance' || type === 'tax') {
+  if (type === 'grossIncome') {
+    const category = 'Gross Income';
+    const year = new Date().getFullYear();
+    title = 'Gross Income — ' + year + ' YTD';
+
+    document.getElementById('modalTitle').textContent = title;
+    const body = document.getElementById('modalBody');
+    body.innerHTML = '';
+
+    function rebuildGrossBody() {
+      body.innerHTML = '';
+      const currentTxs = DB.transactions.filter(t =>
+        new Date(t.date).getFullYear() === year && t.category === category
+      ).sort((a,b) => new Date(b.date)-new Date(a.date));
+      const currentTotal = currentTxs.reduce((s,t) => s + Math.abs(t.amount), 0);
+
+      const note = document.createElement('div');
+      note.style.cssText = 'font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.6';
+      note.textContent = 'Enter your YTD gross income from paychecks. This is what the money flow diagram starts from.';
+      body.appendChild(note);
+
+      const addForm = document.createElement('div');
+      addForm.style.cssText = 'display:flex;gap:8px;margin-bottom:16px;align-items:flex-end';
+      addForm.innerHTML = `
+        <div style="flex:1">
+          <label style="font-size:10px;color:var(--text3);display:block;margin-bottom:4px">Description</label>
+          <input type="text" id="flowAddDesc" placeholder="e.g. Alex YTD Gross, Hannah YTD Gross" style="width:100%">
+        </div>
+        <div style="width:130px">
+          <label style="font-size:10px;color:var(--text3);display:block;margin-bottom:4px">Amount</label>
+          <input type="number" id="flowAddAmt" placeholder="0.00" step="0.01" style="width:100%">
+        </div>
+        <button class="btn btn-accent btn-sm" id="flowAddBtn">+ Add</button>
+      `;
+      body.appendChild(addForm);
+
+      document.getElementById('flowAddBtn').onclick = () => {
+        const desc = document.getElementById('flowAddDesc').value.trim() || 'Gross Income';
+        const amt = parseFloat(document.getElementById('flowAddAmt').value);
+        if (isNaN(amt) || amt <= 0) { showToast('Enter a valid amount'); return; }
+        DB.transactions.push({
+          id: 'tx_manual_gross_' + Date.now(),
+          date: new Date().toISOString().slice(0,10),
+          merchant: desc,
+          amount: amt,  // positive — it's income
+          category: category,
+          source: 'manual',
+          isManual: true
+        });
+        saveData(DB);
+        updateMetricsStrip();
+        renderOverviewCharts();
+        rebuildGrossBody();
+        showToast('Gross income entry added');
+      };
+
+      if (currentTxs.length === 0) {
+        const empty = document.createElement('div');
+        empty.innerHTML = '<div style="padding:20px;color:var(--text3);text-align:center">No entries yet — add one above</div>';
+        body.appendChild(empty);
+      } else {
+        const table = document.createElement('table');
+        table.className = 'tx-table';
+        table.style.width = '100%';
+        table.innerHTML = '<thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th><th></th></tr></thead>';
+        const tbody = document.createElement('tbody');
+        currentTxs.forEach(tx => {
+          const tr = document.createElement('tr');
+          const tdDate = document.createElement('td'); tdDate.style.color='var(--text3)';
+          tdDate.textContent = new Date(tx.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+          const tdDesc = document.createElement('td'); tdDesc.textContent = tx.merchant;
+          const tdAmt = document.createElement('td');
+          tdAmt.style.cssText = 'color:var(--accent);font-family:var(--sans);font-weight:700;text-align:right';
+          tdAmt.textContent = fmt(Math.abs(tx.amount));
+          const tdDel = document.createElement('td');
+          const delBtn = document.createElement('button');
+          delBtn.className = 'btn btn-sm btn-danger'; delBtn.textContent = 'Delete';
+          delBtn.onclick = () => {
+            DB.transactions = DB.transactions.filter(t => t.id !== tx.id);
+            saveData(DB); updateMetricsStrip(); renderOverviewCharts(); rebuildGrossBody();
+          };
+          tdDel.appendChild(delBtn);
+          tr.appendChild(tdDate); tr.appendChild(tdDesc); tr.appendChild(tdAmt); tr.appendChild(tdDel);
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        const scrollDiv = document.createElement('div');
+        scrollDiv.style.cssText = 'max-height:300px;overflow-y:auto';
+        scrollDiv.appendChild(table);
+        body.appendChild(scrollDiv);
+        const footer = document.createElement('div');
+        footer.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)';
+        footer.innerHTML = '<span style="font-size:11px;color:var(--text3)">' + currentTxs.length + ' entries</span>' +
+          '<span style="font-family:var(--sans);font-weight:800;font-size:18px;color:var(--accent)">' + fmt(currentTotal) + '</span>';
+        body.appendChild(footer);
+      }
+    }
+
+    rebuildGrossBody();
+    const modalFooter = document.getElementById('modalFooter');
+    modalFooter.innerHTML = '';
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'btn'; closeBtn.textContent = 'Close'; closeBtn.onclick = closeModal;
+    modalFooter.appendChild(closeBtn);
+    document.getElementById('modalOverlay').classList.add('open');
+    return;
+
+  } else if (type === 'insurance' || type === 'tax') {
     const category = type === 'insurance' ? 'Insurance' : 'Tax';
     color = type === 'insurance' ? 'var(--blue)' : 'var(--amber)';
     title = category + ' — ' + year + ' YTD';
