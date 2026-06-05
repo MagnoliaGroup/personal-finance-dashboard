@@ -674,6 +674,7 @@
   <div class="tab" onclick="switchTab('upload')">Monthly Upload</div>
   <div class="tab" onclick="switchTab('rules')">Rules</div>
   <div class="tab" onclick="switchTab('history')">History</div>
+  <div class="tab" onclick="switchTab('instructions')">Instructions</div>
 </div>
 
 <!-- CONTENT -->
@@ -904,6 +905,118 @@
         </tr></thead>
         <tbody id="snapshotTableBody"></tbody>
       </table>
+    </div>
+  </div>
+
+  <!-- ═══ INSTRUCTIONS ═══ -->
+  <div class="tab-panel" id="panel-instructions">
+
+    <div style="max-width:800px">
+
+      <div style="margin-bottom:28px">
+        <div style="font-family:var(--sans);font-size:22px;font-weight:800;letter-spacing:-0.5px;margin-bottom:6px">Monthly Maintenance</div>
+        <div style="font-size:12px;color:var(--text3)">Run through these steps once a month — takes about 20–30 minutes once you're in the rhythm.</div>
+      </div>
+
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;gap:16px;align-items:flex-start">
+          <div style="font-family:var(--sans);font-size:22px;font-weight:800;color:var(--accent);flex-shrink:0;width:32px">1</div>
+          <div>
+            <div style="font-family:var(--sans);font-size:14px;font-weight:700;margin-bottom:4px">Download your CSVs</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.7">Log into Old National online banking and download the <strong>Checking</strong> and <strong>Savings</strong> CSVs for the prior month. Then download your <strong>Chase credit card</strong> statement CSV for the same period.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;gap:16px;align-items:flex-start">
+          <div style="font-family:var(--sans);font-size:22px;font-weight:800;color:var(--accent);flex-shrink:0;width:32px">2</div>
+          <div>
+            <div style="font-family:var(--sans);font-size:14px;font-weight:700;margin-bottom:4px">Upload to Monthly Upload tab</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.7">Drag all 3 CSVs into the upload zone at once and hit <strong>Process with AI</strong>. It will pull expenses, income deposits, and categorize everything automatically using your saved rules. The status bar will show each batch processing in real time.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;gap:16px;align-items:flex-start">
+          <div style="font-family:var(--sans);font-size:22px;font-weight:800;color:var(--accent);flex-shrink:0;width:32px">3</div>
+          <div>
+            <div style="font-family:var(--sans);font-size:14px;font-weight:700;margin-bottom:4px">Review the Income tab</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.7">Go to the <strong>Income tab</strong> and look through the deposit list. Hit <strong>✕ Exclude</strong> on anything that isn't real income — reimbursements, transfers back in, one-time deposits that don't represent earnings, etc.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;gap:16px;align-items:flex-start">
+          <div style="font-family:var(--sans);font-size:22px;font-weight:800;color:var(--accent);flex-shrink:0;width:32px">4</div>
+          <div>
+            <div style="font-family:var(--sans);font-size:14px;font-weight:700;margin-bottom:4px">Review Expenses tab</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.7">Go to the <strong>Expenses tab</strong>, select the month you just uploaded. Click into <strong>Misc</strong> and reclassify anything obvious using the category dropdown. Delete any non-expenses that slipped through — Vanguard transfers, loan payments, credit card payments, etc. If you find a merchant that always shows up wrong, go add a Rule for it.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;gap:16px;align-items:flex-start">
+          <div style="font-family:var(--sans);font-size:22px;font-weight:800;color:var(--accent);flex-shrink:0;width:32px">5</div>
+          <div>
+            <div style="font-family:var(--sans);font-size:14px;font-weight:700;margin-bottom:4px">Update money flow numbers (from pay stub)</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.7">On the <strong>Overview tab</strong>, scroll to the Money Flow section and click each box to update your YTD totals from your latest pay stub:</div>
+            <div style="margin-top:10px;display:flex;flex-direction:column;gap:6px">
+              <div style="display:flex;align-items:center;gap:10px;font-size:12px">
+                <div style="width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0"></div>
+                <span style="color:var(--text2)"><strong>Gross Income</strong> — YTD gross pay (Alex + Hannah combined)</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;font-size:12px">
+                <div style="width:8px;height:8px;border-radius:50%;background:var(--amber);flex-shrink:0"></div>
+                <span style="color:var(--text2)"><strong>Tax</strong> — YTD federal + state tax withheld</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;font-size:12px">
+                <div style="width:8px;height:8px;border-radius:50%;background:var(--blue);flex-shrink:0"></div>
+                <span style="color:var(--text2)"><strong>Insurance</strong> — YTD health/dental/vision premiums</span>
+              </div>
+              <div style="display:flex;align-items:center;gap:10px;font-size:12px">
+                <div style="width:8px;height:8px;border-radius:50%;background:var(--purple);flex-shrink:0"></div>
+                <span style="color:var(--text2)"><strong>Long Term Investments</strong> — YTD 401k + IRA contributions from paycheck</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:12px">
+        <div style="display:flex;gap:16px;align-items:flex-start">
+          <div style="font-family:var(--sans);font-size:22px;font-weight:800;color:var(--accent);flex-shrink:0;width:32px">6</div>
+          <div>
+            <div style="font-family:var(--sans);font-size:14px;font-weight:700;margin-bottom:4px">Update account balances</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.7">Go to the <strong>Accounts tab</strong> and click each card to enter the current balance. Log into each account to get the latest numbers:</div>
+            <div style="margin-top:10px;display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:12px;color:var(--text2)">
+              <div>• Old National Checking</div>
+              <div>• Old National Savings</div>
+              <div>• Vanguard</div>
+              <div>• IRA</div>
+              <div>• 401k</div>
+              <div>• HSA</div>
+              <div>• Home Mortgage balance</div>
+              <div>• Business Equity (if changed)</div>
+              <div>• Home Value (quarterly is fine)</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:28px">
+        <div style="display:flex;gap:16px;align-items:flex-start">
+          <div style="font-family:var(--sans);font-size:22px;font-weight:800;color:var(--accent);flex-shrink:0;width:32px">7</div>
+          <div>
+            <div style="font-family:var(--sans);font-size:14px;font-weight:700;margin-bottom:4px">Save a snapshot</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.7">Hit the <strong>Save Snapshot</strong> button in the top right header. This locks in your net worth and all account balances for the month so the History chart builds over time. The dashboard auto-saves on the 1st of each month if you open it, but manually saving after you've updated everything ensures the numbers are accurate.</div>
+          </div>
+        </div>
+      </div>
+
     </div>
   </div>
 
@@ -1256,7 +1369,7 @@ function saveSnapshot(auto=false) {
 // ═══════════════════════════════════════════════════════
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach((t,i) => {
-    const tabs = ['overview','accounts','expenses','income','upload','rules','history'];
+    const tabs = ['overview','accounts','expenses','income','upload','rules','history','instructions'];
     t.classList.toggle('active', tabs[i] === name);
   });
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
