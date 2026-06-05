@@ -888,7 +888,10 @@
     <div class="card">
       <div class="card-header">
         <div class="card-title">Snapshot History</div>
-        <button class="btn btn-sm btn-accent" onclick="saveSnapshot()">+ Save Snapshot</button>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm" onclick="addHistoricalSnapshot()">+ Add Historical</button>
+          <button class="btn btn-sm btn-accent" onclick="saveSnapshot()">+ Save Snapshot</button>
+        </div>
       </div>
       <table class="snapshot-table">
         <thead><tr>
@@ -1168,6 +1171,68 @@ function autoSnapshot() {
   const ym = getYearMonth(today);
   const already = DB.snapshots.find(s => s.date.startsWith(ym));
   if (!already) saveSnapshot(true);
+}
+
+function addHistoricalSnapshot() {
+  const currentYear = new Date().getFullYear();
+  const years = [];
+  for (let y = currentYear - 1; y >= currentYear - 10; y--) years.push(y);
+
+  openModal('Add Historical Snapshot', `
+    <div style="font-size:12px;color:var(--text2);margin-bottom:16px;line-height:1.7">
+      Enter a past net worth value to populate your history chart. Pick the month and year it applies to.
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="form-group" style="margin-bottom:0">
+        <label>Year</label>
+        <select id="histYear">
+          ${years.map(y => '<option value="' + y + '">' + y + '</option>').join('')}
+        </select>
+      </div>
+      <div class="form-group" style="margin-bottom:0">
+        <label>Month</label>
+        <select id="histMonth">
+          <option value="12">December</option>
+          <option value="6">June</option>
+          <option value="3">March</option>
+          <option value="9">September</option>
+          <option value="1">January</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Net Worth</label>
+      <input type="number" id="editBalance" placeholder="e.g. 1500000" step="1">
+    </div>
+    <div style="font-size:11px;color:var(--text3)">This will appear on your net worth trend chart in the History tab.</div>
+  `, [
+    { label: 'Cancel', cls: 'btn', action: closeModal },
+    { label: 'Add', cls: 'btn btn-accent', action: () => {
+      const year  = parseInt(document.getElementById('histYear').value);
+      const month = parseInt(document.getElementById('histMonth').value);
+      const nw    = parseFloat(document.getElementById('editBalance').value);
+      if (isNaN(nw) || nw <= 0) { showToast('Enter a valid net worth'); return; }
+
+      const date = new Date(year, month - 1, 1);
+      const snap = {
+        date: date.toISOString(),
+        netWorth: nw,
+        cash: 0,
+        investments: 0,
+        accounts: JSON.parse(JSON.stringify(DB.accounts)),
+        auto: false,
+        historical: true
+      };
+
+      DB.snapshots.push(snap);
+      // Keep sorted newest first
+      DB.snapshots.sort((a,b) => new Date(b.date) - new Date(a.date));
+      saveData(DB);
+      renderHistoryTab();
+      closeModal();
+      showToast('Historical snapshot added for ' + date.toLocaleDateString('en-US',{month:'long',year:'numeric'}));
+    }}
+  ]);
 }
 
 function saveSnapshot(auto=false) {
@@ -2537,12 +2602,18 @@ function renderSnapshotTable() {
     const prev = DB.snapshots[i+1];
     const delta = prev ? snap.netWorth - prev.netWorth : null;
     const tr = document.createElement('tr');
+    const dateStr = new Date(snap.date).toLocaleDateString('en-US',{month:'short',year:'numeric'});
+    const badge = snap.historical
+      ? '<span class="badge badge-green">historical</span>'
+      : snap.auto ? '<span class="badge badge-blue">auto</span>' : '';
+    const deltaColor = delta===null ? 'var(--text3)' : delta>=0 ? 'var(--accent)' : 'var(--red)';
+    const deltaStr = delta===null ? '—' : (delta>=0?'▲':'▼')+' '+fmt(Math.abs(delta));
     tr.innerHTML = `
-      <td>${new Date(snap.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})} ${snap.auto?'<span class="badge badge-blue">auto</span>':''}</td>
+      <td>${dateStr} ${badge}</td>
       <td style="font-family:var(--sans);font-weight:700;color:var(--accent)">${fmt(snap.netWorth)}</td>
-      <td style="color:${delta===null?'var(--text3)':delta>=0?'var(--accent)':'var(--red)'}">${delta===null?'—':(delta>=0?'▲':'▼')+' '+fmt(Math.abs(delta))}</td>
-      <td>${fmt(snap.cash)}</td>
-      <td>${fmt(snap.investments)}</td>
+      <td style="color:${deltaColor}">${deltaStr}</td>
+      <td style="color:var(--text3)">${snap.historical ? '—' : fmt(snap.cash)}</td>
+      <td style="color:var(--text3)">${snap.historical ? '—' : fmt(snap.investments)}</td>
       <td><button class="btn btn-sm btn-danger" onclick="deleteSnapshot(${i})">Delete</button></td>
     `;
     tbody.appendChild(tr);
