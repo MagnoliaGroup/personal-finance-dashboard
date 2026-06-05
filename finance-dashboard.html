@@ -1707,12 +1707,25 @@ function openAccountEdit(ac, isLiability) {
 function populateMonthSelectors() {
   const sel = document.getElementById('expMonth');
   sel.innerHTML = '';
+
+  // Group months by year and add a "Full Year" option for each year
   const months = getAllMonths();
-  months.forEach(ym => {
-    const o = document.createElement('option');
-    o.value = ym;
-    o.textContent = monthLabel(ym);
-    sel.appendChild(o);
+  const years = [...new Set(months.map(m => m.split('-')[0]))].sort().reverse();
+
+  years.forEach(year => {
+    // Full year option
+    const oYear = document.createElement('option');
+    oYear.value = 'year_' + year;
+    oYear.textContent = '── ' + year + ' Full Year ──';
+    sel.appendChild(oYear);
+
+    // Individual months for this year
+    months.filter(m => m.startsWith(year)).forEach(ym => {
+      const o = document.createElement('option');
+      o.value = ym;
+      o.textContent = monthLabel(ym);
+      sel.appendChild(o);
+    });
   });
 }
 
@@ -1724,14 +1737,29 @@ function getAllMonths() {
 }
 
 function renderExpenses() {
-  const ym = document.getElementById('expMonth').value || thisMonth();
-  const txs = getMonthTransactions(ym);
-  const spent = getMonthSpent(ym);
+  const val = document.getElementById('expMonth').value || thisMonth();
+  const isFullYear = val.startsWith('year_');
+  const year = isFullYear ? parseInt(val.replace('year_', '')) : null;
+
+  // Get transactions — either full year or single month
+  let txs, spent;
+  if (isFullYear) {
+    txs = DB.transactions.filter(t => new Date(t.date).getFullYear() === year);
+    spent = txs.filter(t => t.amount < 0 && !isTransfer(t) && !isCreditCardPayment(t)
+      && t.category !== 'Tax' && t.category !== 'Insurance' && t.category !== 'Long Term Investments')
+      .reduce((s,t) => s + Math.abs(t.amount), 0);
+  } else {
+    txs = getMonthTransactions(val);
+    spent = getMonthSpent(val);
+  }
+
   document.getElementById('expTotal').textContent = fmt(spent);
 
-  // Group by category (exclude income, internal)
+  // Group by category
   const cats = {};
-  txs.filter(t => t.amount < 0 && !isTransfer(t) && !isCreditCardPayment(t) && t.category !== 'Tax' && t.category !== 'Insurance').forEach(tx => {
+  txs.filter(t => t.amount < 0 && !isTransfer(t) && !isCreditCardPayment(t)
+    && t.category !== 'Tax' && t.category !== 'Insurance' && t.category !== 'Long Term Investments')
+  .forEach(tx => {
     const cat = tx.category || 'Misc';
     cats[cat] = (cats[cat] || 0) + Math.abs(tx.amount);
   });
@@ -1743,7 +1771,7 @@ function renderExpenses() {
   const bars = document.getElementById('expBars');
   bars.innerHTML = '';
   if (sorted.length === 0) {
-    bars.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div>No expense data for this month</div>';
+    bars.innerHTML = '<div class="empty-state"><div class="empty-icon">📊</div>No expense data for this period</div>';
     return;
   }
 
@@ -1756,7 +1784,8 @@ function renderExpenses() {
       <div class="expense-bar-amount" style="color:var(--text)">${fmt(amt)}</div>
       <div class="expense-bar-pct">${(amt/total*100).toFixed(1)}%</div>
     `;
-    row.onclick = () => drillCategory(cat, ym);
+    // For drill-down: pass year mode info
+    row.onclick = () => isFullYear ? drillCategoryYear(cat, year) : drillCategory(cat, val);
     bars.appendChild(row);
   });
 }
@@ -1844,6 +1873,64 @@ function drillCategory(cat, ym) {
     tbody.appendChild(tr);
   });
 
+  content.innerHTML = '';
+  content.appendChild(table);
+}
+
+function drillCategoryYear(cat, year) {
+  currentDrillCategory = cat;
+  currentDrillYm = 'year_' + year;
+  const txs = DB.transactions.filter(t =>
+    new Date(t.date).getFullYear() === year && t.category === cat && t.amount < 0
+  ).sort((a,b) => new Date(b.date) - new Date(a.date));
+
+  const titleEl = document.getElementById('expDrillTitle');
+  titleEl.textContent = cat + ' — ' + year + ' Full Year (' + txs.length + ' transactions)';
+  const content = document.getElementById('expDrillContent');
+
+  if (txs.length === 0) {
+    content.innerHTML = '<div class="empty-state">No transactions in this category</div>';
+    return;
+  }
+
+  const otherCats = getCategories().filter(c=>c!==cat);
+  const table = document.createElement('table');
+  table.className = 'tx-table';
+  table.innerHTML = '<thead><tr><th>Date</th><th>Merchant</th><th>Amount</th><th>Category</th><th></th></tr></thead>';
+  const tbody = document.createElement('tbody');
+
+  txs.forEach(tx => {
+    const tr = document.createElement('tr');
+    const tdDate = document.createElement('td'); tdDate.style.color='var(--text3)';
+    tdDate.textContent = new Date(tx.date).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    const tdMerchant = document.createElement('td'); tdMerchant.textContent = tx.merchant;
+    const tdAmt = document.createElement('td'); tdAmt.className = 'tx-amount-neg';
+    tdAmt.textContent = fmt(Math.abs(tx.amount));
+    const tdCat = document.createElement('td');
+    const sel = document.createElement('select');
+    sel.className = 'category-pill';
+    sel.dataset.txid = tx.id;
+    sel.style.cssText = 'width:auto;padding:2px 8px;font-size:10px';
+    sel.onchange = function() { reclassify(this); };
+    [cat, ...otherCats].forEach(c => {
+      const opt = document.createElement('option');
+      opt.value = c; opt.textContent = c;
+      if (c === cat) opt.selected = true;
+      sel.appendChild(opt);
+    });
+    tdCat.appendChild(sel);
+    const tdDel = document.createElement('td');
+    const delBtn = document.createElement('button');
+    delBtn.className = 'btn btn-sm btn-danger'; delBtn.textContent = 'Delete';
+    delBtn.dataset.txid = tx.id;
+    delBtn.addEventListener('click', () => deleteTransaction(delBtn));
+    tdDel.appendChild(delBtn);
+    tr.appendChild(tdDate); tr.appendChild(tdMerchant); tr.appendChild(tdAmt);
+    tr.appendChild(tdCat); tr.appendChild(tdDel);
+    tbody.appendChild(tr);
+  });
+
+  table.appendChild(tbody);
   content.innerHTML = '';
   content.appendChild(table);
 }
