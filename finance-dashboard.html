@@ -48,7 +48,7 @@
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 18px 32px;
+    padding: 12px 32px;
     border-bottom: 1px solid var(--border);
     background: var(--bg);
     position: sticky;
@@ -115,7 +115,7 @@
 
   .metric-box {
     background: var(--bg);
-    padding: 20px 24px;
+    padding: 12px 24px;
     display: flex;
     flex-direction: column;
     gap: 4px;
@@ -156,7 +156,7 @@
   }
 
   .tab {
-    padding: 14px 20px;
+    padding: 10px 20px;
     font-size: 12px;
     color: var(--text3);
     cursor: pointer;
@@ -171,7 +171,7 @@
 
   /* ── CONTENT AREA ── */
   .content {
-    padding: 28px 32px;
+    padding: 18px 32px;
     max-width: 1600px;
   }
 
@@ -189,14 +189,14 @@
     background: var(--bg2);
     border: 1px solid var(--border);
     border-radius: 10px;
-    padding: 20px;
+    padding: 14px 18px;
   }
 
   .card-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    margin-bottom: 16px;
+    margin-bottom: 10px;
   }
 
   .card-title {
@@ -283,7 +283,7 @@
     display: flex;
     align-items: center;
     gap: 0;
-    padding: 16px 0;
+    padding: 10px 0;
   }
 
   .flow-source {
@@ -682,26 +682,27 @@
 
   <!-- ═══ OVERVIEW ═══ -->
   <div class="tab-panel active" id="panel-overview">
-    <div class="grid-2" style="margin-bottom:16px">
+    <div class="grid-2" style="margin-bottom:10px">
       <div class="card">
         <div class="card-header">
           <div><div class="card-title">Net Worth</div><div class="card-sub">Total assets minus liabilities</div></div>
         </div>
-        <div style="font-family:var(--sans);font-size:42px;font-weight:800;letter-spacing:-2px;color:var(--accent)" id="ovNetWorth">$0</div>
-        <div style="margin-top:16px" class="chart-wrap"><canvas id="chartNetWorthTrend" height="80"></canvas></div>
+        <div style="font-family:var(--sans);font-size:32px;font-weight:800;letter-spacing:-1.5px;color:var(--accent)" id="ovNetWorth">$0</div>
+        <div style="margin-top:8px" class="chart-wrap"><canvas id="chartNetWorthTrend" height="60"></canvas></div>
       </div>
       <div class="card">
         <div class="card-header">
           <div><div class="card-title">Liquid Assets</div><div class="card-sub">Cash + accessible investments</div></div>
         </div>
-        <div style="font-family:var(--sans);font-size:42px;font-weight:800;letter-spacing:-2px;color:var(--blue)" id="ovLiquid">$0</div>
-        <div style="margin-top:16px" class="chart-wrap"><canvas id="chartLiquidBreakdown" height="80"></canvas></div>
+        <div style="font-family:var(--sans);font-size:32px;font-weight:800;letter-spacing:-1.5px;color:var(--blue)" id="ovLiquid">$0</div>
+        <div style="margin-top:8px" class="chart-wrap"><canvas id="chartLiquidBreakdown" height="60"></canvas></div>
       </div>
     </div>
 
-    <div class="card" style="margin-bottom:16px">
+    <div class="card" style="margin-bottom:10px">
       <div class="card-header">
         <div><div class="card-title">Money Flow</div><div class="card-sub" id="flowMonthLabel">This month</div></div>
+        <select id="flowYearSelect" onchange="renderOverviewCharts()" style="width:90px"></select>
       </div>
       <div class="flow-layout" id="moneyFlow" style="position:relative">
         <div class="flow-source" id="flowSrc" onclick="showFlowDrill('grossIncome')" title="Click to manage gross income">
@@ -722,7 +723,7 @@
           <select id="ovYearSelect" onchange="renderOverviewCharts()" style="width:90px"></select>
         </div>
       </div>
-      <div class="chart-wrap"><canvas id="chartIncomeExpenses" height="180"></canvas></div>
+      <div class="chart-wrap"><canvas id="chartIncomeExpenses" height="140"></canvas></div>
     </div>
   </div>
 
@@ -830,7 +831,7 @@
 
   <!-- ═══ RULES ═══ -->
   <div class="tab-panel" id="panel-rules">
-    <div class="grid-2" style="margin-bottom:16px">
+    <div class="grid-2" style="margin-bottom:10px">
 
       <!-- Left col: Add Rule + Add Category -->
       <div style="display:flex;flex-direction:column;gap:16px">
@@ -1429,32 +1430,63 @@ function populateYearSelector() {
   }
 }
 
+function populateFlowYearSelector() {
+  const sel = document.getElementById('flowYearSelect');
+  const currentYear = new Date().getFullYear();
+
+  // Collect years from transactions plus current year, going back a few years
+  const yearsSet = new Set([currentYear, currentYear - 1]);
+  DB.transactions.forEach(t => yearsSet.add(new Date(t.date).getFullYear()));
+  const years = [...yearsSet].sort((a,b) => b - a);
+
+  const prevVal = sel.value;
+  sel.innerHTML = '';
+  years.forEach(y => {
+    const o = document.createElement('option');
+    o.value = y;
+    o.textContent = y;
+    sel.appendChild(o);
+  });
+  // Preserve selection if still valid, else default to current year
+  if (prevVal && years.includes(parseInt(prevVal))) {
+    sel.value = prevVal;
+  } else {
+    sel.value = currentYear;
+  }
+}
+
 function renderOverviewCharts() {
   const nw = calcNetWorth();
   document.getElementById('ovNetWorth').textContent = fmt(nw);
   document.getElementById('ovLiquid').textContent = fmt(calcCash() + calcInvestments());
 
-  // Money flow — YTD
-  const flowYear = new Date().getFullYear();
+  // Money flow — year selectable
+  populateFlowYearSelector();
+  const flowYear = parseInt(document.getElementById('flowYearSelect').value) || new Date().getFullYear();
+  const isCurrentYear = flowYear === new Date().getFullYear();
   const income = getGrossIncomeOrFallback(flowYear);
   const yearTxs = DB.transactions.filter(t => new Date(t.date).getFullYear() === flowYear);
   const tax = yearTxs.filter(t=>t.category==='Tax').reduce((s,t)=>s+Math.abs(t.amount),0);
   const insurance = yearTxs.filter(t=>t.category==='Insurance').reduce((s,t)=>s+Math.abs(t.amount),0);
   const ltInvestments = yearTxs.filter(t=>t.category==='Long Term Investments').reduce((s,t)=>s+Math.abs(t.amount),0);
-  const expenses = getYearSpent(flowYear);
+  // For the current year, expenses are derived from real transactions.
+  // For past years, allow a manual "Expenses (manual)" category total.
+  const manualExpenses = yearTxs.filter(t=>t.category==='Expenses (manual)').reduce((s,t)=>s+Math.abs(t.amount),0);
+  const expenses = isCurrentYear ? getYearSpent(flowYear) : (manualExpenses || getYearSpent(flowYear));
   const savings = Math.max(0, income - expenses - tax - insurance - ltInvestments);
 
-  document.getElementById('flowMonthLabel').textContent = flowYear + ' Year to Date';
+  document.getElementById('flowMonthLabel').textContent = flowYear + (isCurrentYear ? ' Year to Date' : ' Full Year');
   document.getElementById('flowIncome').textContent = fmt(income);
 
   const pct = v => income > 0 ? Math.round(v/income*100) : 0;
 
   // Define all flow boxes with their values
+  const expensesSubtitle = isCurrentYear ? '' : ' · click to manage';
   const flowBoxes = [
     { label:'Savings', value:savings, pct:pct(savings), color:'#4ade80', labelColor:'#9ae6b4', type:'savings',
       style:'border-color:rgba(74,222,128,0.3);background:rgba(74,222,128,0.07)', subtitle:'' },
     { label:'Expenses', value:expenses, pct:pct(expenses), color:'#f87171', labelColor:'#fca5a5', type:'expenses',
-      style:'border-color:rgba(248,113,113,0.3);background:rgba(248,113,113,0.07)', subtitle:'' },
+      style:'border-color:rgba(248,113,113,0.3);background:rgba(248,113,113,0.07)', subtitle:expensesSubtitle },
     { label:'Tax', value:tax, pct:pct(tax), color:'#fbbf24', labelColor:'#fcd34d', type:'tax',
       style:'border-color:rgba(251,191,36,0.3);background:rgba(251,191,36,0.07)', subtitle:' · click to manage' },
     { label:'Insurance', value:insurance, pct:pct(insurance), color:'#60a5fa', labelColor:'#93c5fd', type:'insurance',
@@ -2019,15 +2051,15 @@ function editManualEntry(category) {
 }
 
 function showFlowDrill(type) {
-  const year = new Date().getFullYear();
+  const year = parseInt(document.getElementById('flowYearSelect').value) || new Date().getFullYear();
+  const isCurrentYear = year === new Date().getFullYear();
   const yearTxs = DB.transactions.filter(t => new Date(t.date).getFullYear() === year);
 
   let title, txs, color;
 
   if (type === 'grossIncome') {
     const category = 'Gross Income';
-    const year = new Date().getFullYear();
-    title = 'Gross Income — ' + year + ' YTD';
+    title = 'Gross Income — ' + year + (isCurrentYear ? ' YTD' : ' Full Year');
 
     document.getElementById('modalTitle').textContent = title;
     const body = document.getElementById('modalBody');
@@ -2066,7 +2098,7 @@ function showFlowDrill(type) {
         if (isNaN(amt) || amt <= 0) { showToast('Enter a valid amount'); return; }
         DB.transactions.push({
           id: 'tx_manual_gross_' + Date.now(),
-          date: new Date().toISOString().slice(0,10),
+          date: (isCurrentYear ? new Date() : new Date(year, 11, 31)).toISOString().slice(0,10),
           merchant: desc,
           amount: amt,  // positive — it's income
           category: category,
@@ -2172,7 +2204,7 @@ function showFlowDrill(type) {
         if (isNaN(amt) || amt <= 0) { showToast('Enter a valid amount'); return; }
         DB.transactions.push({
           id: 'tx_manual_' + Date.now(),
-          date: new Date().toISOString().slice(0,10),
+          date: (isCurrentYear ? new Date() : new Date(year, 11, 31)).toISOString().slice(0,10),
           merchant: desc,
           amount: -amt,
           category: category,
@@ -2287,7 +2319,7 @@ function showFlowDrill(type) {
         if (isNaN(amt) || amt <= 0) { showToast('Enter a valid amount'); return; }
         DB.transactions.push({
           id: 'tx_manual_' + Date.now(),
-          date: new Date().toISOString().slice(0,10),
+          date: (isCurrentYear ? new Date() : new Date(year, 11, 31)).toISOString().slice(0,10),
           merchant: desc,
           amount: -amt,
           category: category,
@@ -2352,23 +2384,134 @@ function showFlowDrill(type) {
     document.getElementById('modalOverlay').classList.add('open');
     return;
 
+  } else if (type === 'expenses' && !isCurrentYear) {
+    const category = 'Expenses (manual)';
+    color = 'var(--red)';
+    title = 'Expenses — ' + year + ' Full Year';
+    txs = yearTxs.filter(t => t.category === category).sort((a,b) => new Date(b.date)-new Date(a.date));
+
+    document.getElementById('modalTitle').textContent = title;
+    const body = document.getElementById('modalBody');
+    body.innerHTML = '';
+
+    function rebuildExpBody() {
+      body.innerHTML = '';
+      const currentTxs = DB.transactions.filter(t =>
+        new Date(t.date).getFullYear() === year && t.category === category
+      ).sort((a,b) => new Date(b.date)-new Date(a.date));
+      const currentTotal = currentTxs.reduce((s,t) => s + Math.abs(t.amount), 0);
+
+      const note = document.createElement('div');
+      note.style.cssText = 'font-size:11px;color:var(--text3);margin-bottom:14px;line-height:1.6';
+      note.textContent = 'Enter your total expenses for ' + year + '. Since this is a past year, expenses aren\'t pulled from bank transactions — enter the total(s) manually.';
+      body.appendChild(note);
+
+      const addForm = document.createElement('div');
+      addForm.style.cssText = 'display:flex;gap:8px;margin-bottom:16px;align-items:flex-end';
+      addForm.innerHTML = `
+        <div style="flex:1">
+          <label style="font-size:10px;color:var(--text3);display:block;margin-bottom:4px">Description</label>
+          <input type="text" id="flowAddDesc" placeholder="e.g. Total expenses ${year}" style="width:100%">
+        </div>
+        <div style="width:130px">
+          <label style="font-size:10px;color:var(--text3);display:block;margin-bottom:4px">Amount</label>
+          <input type="number" id="flowAddAmt" placeholder="0.00" step="0.01" style="width:100%">
+        </div>
+        <button class="btn btn-accent btn-sm" id="flowAddBtn">+ Add</button>
+      `;
+      body.appendChild(addForm);
+
+      document.getElementById('flowAddBtn').onclick = () => {
+        const desc = document.getElementById('flowAddDesc').value.trim() || ('Expenses ' + year);
+        const amt = parseFloat(document.getElementById('flowAddAmt').value);
+        if (isNaN(amt) || amt <= 0) { showToast('Enter a valid amount'); return; }
+        DB.transactions.push({
+          id: 'tx_manual_' + Date.now(),
+          date: new Date(year, 11, 31).toISOString().slice(0,10),
+          merchant: desc,
+          amount: -amt,
+          category: category,
+          source: 'manual',
+          isManual: true
+        });
+        saveData(DB);
+        updateMetricsStrip();
+        renderOverviewCharts();
+        rebuildExpBody();
+        showToast('Expense entry added');
+      };
+
+      if (currentTxs.length === 0) {
+        const empty = document.createElement('div');
+        empty.innerHTML = '<div style="padding:20px;color:var(--text3);text-align:center">No entries yet — add one above</div>';
+        body.appendChild(empty);
+      } else {
+        const table = document.createElement('table');
+        table.className = 'tx-table';
+        table.style.width = '100%';
+        table.innerHTML = '<thead><tr><th>Date</th><th>Description</th><th style="text-align:right">Amount</th><th></th></tr></thead>';
+        const tbody = document.createElement('tbody');
+        currentTxs.forEach(tx => {
+          const tr = document.createElement('tr');
+          const tdDate = document.createElement('td'); tdDate.style.color='var(--text3)';
+          tdDate.textContent = new Date(tx.date).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
+          const tdDesc = document.createElement('td'); tdDesc.textContent = tx.merchant;
+          const tdAmt = document.createElement('td');
+          tdAmt.style.cssText = 'color:var(--red);font-family:var(--sans);font-weight:700;text-align:right';
+          tdAmt.textContent = fmt(Math.abs(tx.amount));
+          const tdDel = document.createElement('td');
+          const delBtn = document.createElement('button');
+          delBtn.className = 'btn btn-sm btn-danger'; delBtn.textContent = 'Delete';
+          delBtn.onclick = () => {
+            DB.transactions = DB.transactions.filter(t => t.id !== tx.id);
+            saveData(DB); updateMetricsStrip(); renderOverviewCharts(); rebuildExpBody();
+          };
+          tdDel.appendChild(delBtn);
+          tr.appendChild(tdDate); tr.appendChild(tdDesc); tr.appendChild(tdAmt); tr.appendChild(tdDel);
+          tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+        const scrollDiv = document.createElement('div');
+        scrollDiv.style.cssText = 'max-height:300px;overflow-y:auto';
+        scrollDiv.appendChild(table);
+        body.appendChild(scrollDiv);
+        const footer = document.createElement('div');
+        footer.style.cssText = 'display:flex;justify-content:space-between;align-items:center;margin-top:14px;padding-top:14px;border-top:1px solid var(--border)';
+        footer.innerHTML = '<span style="font-size:11px;color:var(--text3)">' + currentTxs.length + ' entries</span>' +
+          '<span style="font-family:var(--sans);font-weight:800;font-size:18px;color:var(--red)">' + fmt(currentTotal) + '</span>';
+        body.appendChild(footer);
+      }
+    }
+
+    rebuildExpBody();
+    const modalFooter = document.getElementById('modalFooter');
+    modalFooter.innerHTML = '';
+    const closeBtn = document.createElement('button');
+    closeBtn.className = 'btn'; closeBtn.textContent = 'Close'; closeBtn.onclick = closeModal;
+    modalFooter.appendChild(closeBtn);
+    document.getElementById('modalOverlay').classList.add('open');
+    return;
+
   } else if (type === 'expenses') {
     title = 'All Expense Transactions — ' + year + ' YTD';
     txs = yearTxs.filter(t => t.amount < 0 && !isTransfer(t) && !isCreditCardPayment(t) && t.category !== 'Tax' && t.category !== 'Insurance');
     color = 'var(--red)';
   } else if (type === 'savings') {
-    title = 'Savings — ' + year + ' YTD';
-    const income = getYearIncome(year);
-    const expenses = getYearSpent(year);
+    const periodLabel = isCurrentYear ? ' YTD' : ' Full Year';
+    const income = getGrossIncomeOrFallback(year);
+    const manualExpenses = yearTxs.filter(t=>t.category==='Expenses (manual)').reduce((s,t)=>s+Math.abs(t.amount),0);
+    const expenses = isCurrentYear ? getYearSpent(year) : (manualExpenses || getYearSpent(year));
     const tax = yearTxs.filter(t=>t.category==='Tax').reduce((s,t)=>s+Math.abs(t.amount),0);
     const insurance = yearTxs.filter(t=>t.category==='Insurance').reduce((s,t)=>s+Math.abs(t.amount),0);
-    const savings = income - expenses - tax - insurance;
-    openModal('Savings — ' + year + ' YTD', `
+    const ltInvestments = yearTxs.filter(t=>t.category==='Long Term Investments').reduce((s,t)=>s+Math.abs(t.amount),0);
+    const savings = income - expenses - tax - insurance - ltInvestments;
+    openModal('Savings — ' + year + periodLabel, `
       <div style="font-size:13px;line-height:2;color:var(--text2)">
-        <div style="display:flex;justify-content:space-between"><span>YTD Income</span><span style="color:var(--accent);font-family:var(--sans);font-weight:700">${fmt(income)}</span></div>
+        <div style="display:flex;justify-content:space-between"><span>Gross Income</span><span style="color:var(--accent);font-family:var(--sans);font-weight:700">${fmt(income)}</span></div>
         <div style="display:flex;justify-content:space-between"><span>− Expenses</span><span style="color:var(--red);font-family:var(--sans);font-weight:700">−${fmt(expenses)}</span></div>
         <div style="display:flex;justify-content:space-between"><span>− Tax</span><span style="color:var(--amber);font-family:var(--sans);font-weight:700">−${fmt(tax)}</span></div>
         <div style="display:flex;justify-content:space-between"><span>− Insurance</span><span style="color:var(--blue);font-family:var(--sans);font-weight:700">−${fmt(insurance)}</span></div>
+        <div style="display:flex;justify-content:space-between"><span>− Long Term Investments</span><span style="color:var(--purple);font-family:var(--sans);font-weight:700">−${fmt(ltInvestments)}</span></div>
         <div style="height:1px;background:var(--border);margin:8px 0"></div>
         <div style="display:flex;justify-content:space-between"><span style="color:var(--text)">= Net Savings</span><span style="color:var(--accent);font-family:var(--sans);font-weight:800;font-size:18px">${fmt(savings)}</span></div>
       </div>
