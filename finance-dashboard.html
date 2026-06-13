@@ -695,7 +695,7 @@
           <div><div class="card-title">Liquid Assets</div><div class="card-sub">Cash + accessible investments</div></div>
         </div>
         <div style="font-family:var(--sans);font-size:32px;font-weight:800;letter-spacing:-1.5px;color:var(--blue)" id="ovLiquid">$0</div>
-        <div style="margin-top:8px" class="chart-wrap"><canvas id="chartLiquidBreakdown" height="60"></canvas></div>
+        <div style="margin-top:8px;height:140px" class="chart-wrap"><canvas id="chartLiquidBreakdown"></canvas></div>
       </div>
     </div>
 
@@ -1550,6 +1550,7 @@ function renderOverviewCharts() {
     },
     options:{
       responsive:true,
+      maintainAspectRatio:false,
       cutout:'70%',
       plugins:{
         legend:{ labels:{ color:'#8a8f9e', font:{family:'DM Mono'}, boxWidth:12, padding:16 } },
