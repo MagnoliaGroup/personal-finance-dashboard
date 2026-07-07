@@ -631,6 +631,9 @@
   <div class="logo">⬡ <span>LEDGER</span></div>
   <div class="header-right">
     <span class="header-date" id="headerDate"></span>
+    <button class="btn btn-sm" onclick="exportData()">⬇ Export</button>
+    <button class="btn btn-sm" onclick="document.getElementById('importFileInput').click()">⬆ Import</button>
+    <input type="file" id="importFileInput" accept=".json" style="display:none" onchange="importData(event)">
     <button class="btn btn-sm" onclick="saveSnapshot()">⊕ Save Snapshot</button>
     <button class="btn btn-sm btn-accent" onclick="openApiKeyModal()">API Key</button>
   </div>
@@ -677,7 +680,6 @@
   <div class="tab active" onclick="switchTab('overview')">Overview</div>
   <div class="tab" onclick="switchTab('accounts')">Accounts</div>
   <div class="tab" onclick="switchTab('expenses')">Expenses</div>
-  <div class="tab" onclick="switchTab('income')">Income</div>
   <div class="tab" onclick="switchTab('upload')">Monthly Upload</div>
   <div class="tab" onclick="switchTab('rules')">Rules</div>
   <div class="tab" onclick="switchTab('history')">History</div>
@@ -775,32 +777,7 @@
   </div>
 
   <!-- ═══ INCOME ═══ -->
-  <div class="tab-panel" id="panel-income">
-    <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;flex-wrap:wrap">
-      <div>
-        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">Year</div>
-        <select id="incomeYear" onchange="renderIncomeTab()" style="width:100px"></select>
-      </div>
-      <div style="flex:1"></div>
-      <div style="text-align:right">
-        <div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px">YTD Total</div>
-        <div style="font-family:var(--sans);font-size:28px;font-weight:800;color:var(--accent)" id="incomeTotalDisplay">$0</div>
-      </div>
-    </div>
-    <div class="card">
-      <div class="card-header">
-        <div>
-          <div class="card-title">Income Transactions</div>
-          <div class="card-sub">All deposits from Old National accounts — click ✕ to exclude from total</div>
-        </div>
-      </div>
-      <div id="incomeTableWrap">
-        <div class="empty-state"><div class="empty-icon">💰</div>No income transactions yet — upload your Old National CSV</div>
-      </div>
-    </div>
-  </div>
-
-    <!-- ═══ UPLOAD ═══ -->
+  <!-- ═══ UPLOAD ═══ -->
   <div class="tab-panel" id="panel-upload">
     <div class="api-key-notice">
       <span>🔑</span>
@@ -930,8 +907,8 @@
         <div style="display:flex;gap:16px;align-items:flex-start">
           <div style="font-family:var(--sans);font-size:22px;font-weight:800;color:var(--accent);flex-shrink:0;width:32px">1</div>
           <div>
-            <div style="font-family:var(--sans);font-size:14px;font-weight:700;margin-bottom:4px">Download your CSVs</div>
-            <div style="font-size:12px;color:var(--text2);line-height:1.7">Log into Old National online banking and download the <strong>Checking</strong> and <strong>Savings</strong> CSVs for the prior month. Then download your <strong>Chase credit card</strong> statement CSV for the same period.</div>
+            <div style="font-family:var(--sans);font-size:14px;font-weight:700;margin-bottom:4px">Download your expense CSVs</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.7">Log into Old National online banking and download the <strong>Checking</strong> and <strong>Savings</strong> CSVs for the prior month. Then download your <strong>Chase credit card</strong> statement CSV for the same period. These are used for expense tracking only — income is handled manually in the Money Flow section.</div>
           </div>
         </div>
       </div>
@@ -941,7 +918,7 @@
           <div style="font-family:var(--sans);font-size:22px;font-weight:800;color:var(--accent);flex-shrink:0;width:32px">2</div>
           <div>
             <div style="font-family:var(--sans);font-size:14px;font-weight:700;margin-bottom:4px">Upload to Monthly Upload tab</div>
-            <div style="font-size:12px;color:var(--text2);line-height:1.7">Drag all 3 CSVs into the upload zone at once and hit <strong>Process with AI</strong>. It will pull expenses, income deposits, and categorize everything automatically using your saved rules. The status bar will show each batch processing in real time.</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.7">Drag all 3 CSVs into the upload zone at once and hit <strong>Process with AI</strong>. It will categorize your expenses automatically using your saved rules. The status bar will show each batch processing in real time.</div>
           </div>
         </div>
       </div>
@@ -949,16 +926,6 @@
       <div class="card" style="margin-bottom:12px">
         <div style="display:flex;gap:16px;align-items:flex-start">
           <div style="font-family:var(--sans);font-size:22px;font-weight:800;color:var(--accent);flex-shrink:0;width:32px">3</div>
-          <div>
-            <div style="font-family:var(--sans);font-size:14px;font-weight:700;margin-bottom:4px">Review the Income tab</div>
-            <div style="font-size:12px;color:var(--text2);line-height:1.7">Go to the <strong>Income tab</strong> and look through the deposit list. Hit <strong>✕ Exclude</strong> on anything that isn't real income — reimbursements, transfers back in, one-time deposits that don't represent earnings, etc.</div>
-          </div>
-        </div>
-      </div>
-
-      <div class="card" style="margin-bottom:12px">
-        <div style="display:flex;gap:16px;align-items:flex-start">
-          <div style="font-family:var(--sans);font-size:22px;font-weight:800;color:var(--accent);flex-shrink:0;width:32px">4</div>
           <div>
             <div style="font-family:var(--sans);font-size:14px;font-weight:700;margin-bottom:4px">Review Expenses tab</div>
             <div style="font-size:12px;color:var(--text2);line-height:1.7">Go to the <strong>Expenses tab</strong>, select the month you just uploaded. Click into <strong>Misc</strong> and reclassify anything obvious using the category dropdown. Delete any non-expenses that slipped through — Vanguard transfers, loan payments, credit card payments, etc. If you find a merchant that always shows up wrong, go add a Rule for it.</div>
@@ -968,7 +935,7 @@
 
       <div class="card" style="margin-bottom:12px">
         <div style="display:flex;gap:16px;align-items:flex-start">
-          <div style="font-family:var(--sans);font-size:22px;font-weight:800;color:var(--accent);flex-shrink:0;width:32px">5</div>
+          <div style="font-family:var(--sans);font-size:22px;font-weight:800;color:var(--accent);flex-shrink:0;width:32px">4</div>
           <div>
             <div style="font-family:var(--sans);font-size:14px;font-weight:700;margin-bottom:4px">Update money flow numbers (from pay stub)</div>
             <div style="font-size:12px;color:var(--text2);line-height:1.7">On the <strong>Overview tab</strong>, scroll to the Money Flow section and click each box to update your YTD totals from your latest pay stub:</div>
@@ -996,7 +963,7 @@
 
       <div class="card" style="margin-bottom:12px">
         <div style="display:flex;gap:16px;align-items:flex-start">
-          <div style="font-family:var(--sans);font-size:22px;font-weight:800;color:var(--accent);flex-shrink:0;width:32px">6</div>
+          <div style="font-family:var(--sans);font-size:22px;font-weight:800;color:var(--accent);flex-shrink:0;width:32px">5</div>
           <div>
             <div style="font-family:var(--sans);font-size:14px;font-weight:700;margin-bottom:4px">Update account balances</div>
             <div style="font-size:12px;color:var(--text2);line-height:1.7">Go to the <strong>Accounts tab</strong> and click each card to enter the current balance. Log into each account to get the latest numbers:</div>
@@ -1017,10 +984,20 @@
 
       <div class="card" style="margin-bottom:28px">
         <div style="display:flex;gap:16px;align-items:flex-start">
-          <div style="font-family:var(--sans);font-size:22px;font-weight:800;color:var(--accent);flex-shrink:0;width:32px">7</div>
+          <div style="font-family:var(--sans);font-size:22px;font-weight:800;color:var(--accent);flex-shrink:0;width:32px">6</div>
           <div>
             <div style="font-family:var(--sans);font-size:14px;font-weight:700;margin-bottom:4px">Save a snapshot</div>
             <div style="font-size:12px;color:var(--text2);line-height:1.7">Hit the <strong>Save Snapshot</strong> button in the top right header. This locks in your net worth and all account balances for the month so the History chart builds over time. The dashboard auto-saves on the 1st of each month if you open it, but manually saving after you've updated everything ensures the numbers are accurate.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:28px">
+        <div style="display:flex;gap:16px;align-items:flex-start">
+          <div style="font-family:var(--sans);font-size:22px;font-weight:800;color:var(--accent);flex-shrink:0;width:32px">7</div>
+          <div>
+            <div style="font-family:var(--sans);font-size:14px;font-weight:700;margin-bottom:4px">Export backup &amp; save to Google Drive</div>
+            <div style="font-size:12px;color:var(--text2);line-height:1.7">Click the <strong>⬇ Export</strong> button in the top right header. It will download a <code style="background:var(--bg3);padding:1px 5px;border-radius:3px">ledger-backup-YYYY-MM-DD.json</code> file containing all your transactions, balances, snapshots, rules, and goals. Upload this file to <strong>Google Drive</strong> and overwrite the previous backup. If you ever switch computers or lose your browser data, click <strong>⬆ Import</strong> and select this file to restore everything exactly as it was.</div>
           </div>
         </div>
       </div>
@@ -1356,6 +1333,75 @@ function addHistoricalSnapshot() {
   ]);
 }
 
+function exportData() {
+  const exportObj = {
+    exportedAt: new Date().toISOString(),
+    version: 1,
+    data: DB
+  };
+  const json = JSON.stringify(exportObj, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const dateStr = new Date().toISOString().slice(0,10);
+  a.href = url;
+  a.download = 'ledger-backup-' + dateStr + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('Backup downloaded — save to Google Drive!');
+}
+
+function importData(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      // Support both raw DB object and wrapped export format
+      const importedDB = parsed.version === 1 ? parsed.data : parsed;
+      // Validate it looks like our data structure
+      if (!importedDB.accounts || !Array.isArray(importedDB.transactions)) {
+        showToast('Invalid backup file — please use a Ledger export');
+        return;
+      }
+      openModal('Restore from Backup', `
+        <div style="font-size:13px;color:var(--text2);line-height:1.8">
+          <div style="margin-bottom:12px">This will replace <strong>all current data</strong> with the backup from:</div>
+          <div style="font-family:var(--sans);font-size:16px;font-weight:700;color:var(--accent);margin-bottom:12px">${new Date(parsed.exportedAt || Date.now()).toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'})}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;color:var(--text3)">
+            <div>Transactions: <strong style="color:var(--text2)">${importedDB.transactions.length}</strong></div>
+            <div>Snapshots: <strong style="color:var(--text2)">${importedDB.snapshots.length}</strong></div>
+            <div>Rules: <strong style="color:var(--text2)">${importedDB.rules.length}</strong></div>
+            <div>Accounts: <strong style="color:var(--text2)">${importedDB.accounts.length}</strong></div>
+          </div>
+          <div style="margin-top:16px;padding:10px;background:rgba(248,113,113,0.08);border:1px solid rgba(248,113,113,0.2);border-radius:6px;font-size:11px;color:var(--red)">
+            ⚠ Your current data will be overwritten. This cannot be undone.
+          </div>
+        </div>
+      `, [
+        { label: 'Cancel', cls: 'btn', action: () => { closeModal(); event.target.value = ''; } },
+        { label: 'Restore Backup', cls: 'btn btn-accent', action: () => {
+          DB = importedDB;
+          // Ensure goals object exists
+          if (!DB.goals) DB.goals = { grossIncomeGoal: 300000, magnoliaGoal: 10000, magnoliaActual: 0 };
+          saveData(DB);
+          closeModal();
+          event.target.value = '';
+          showToast('Backup restored successfully!');
+          setTimeout(() => location.reload(), 800);
+        }}
+      ]);
+    } catch(err) {
+      showToast('Could not read file — make sure it\'s a valid Ledger backup');
+      event.target.value = '';
+    }
+  };
+  reader.readAsText(file);
+}
+
 function saveSnapshot(auto=false) {
   const now = new Date();
   const snap = {
@@ -1377,7 +1423,7 @@ function saveSnapshot(auto=false) {
 // ═══════════════════════════════════════════════════════
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach((t,i) => {
-    const tabs = ['overview','accounts','expenses','income','upload','rules','history','instructions'];
+    const tabs = ['overview','accounts','expenses','upload','rules','history','instructions'];
     t.classList.toggle('active', tabs[i] === name);
   });
   document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
@@ -1385,7 +1431,6 @@ function switchTab(name) {
   if (name==='overview') renderOverviewCharts();
   if (name==='history') renderHistoryTab();
   if (name==='expenses') renderExpenses();
-  if (name==='income') renderIncomeTab();
 }
 
 // ═══════════════════════════════════════════════════════
