@@ -738,16 +738,28 @@
 
   <!-- ═══ ACCOUNTS ═══ -->
   <div class="tab-panel" id="panel-accounts">
-    <div class="section-heading">Assets — Cash</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+      <div class="section-heading" style="margin:0">Assets — Cash</div>
+      <button class="btn btn-sm" onclick="addAccount('cash')">+ Add Account</button>
+    </div>
     <div class="account-grid" id="acctCash"></div>
 
-    <div class="section-heading">Assets — Investments</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:20px;margin-bottom:8px">
+      <div class="section-heading" style="margin:0">Assets — Investments</div>
+      <button class="btn btn-sm" onclick="addAccount('investments')">+ Add Account</button>
+    </div>
     <div class="account-grid" id="acctInvestments"></div>
 
-    <div class="section-heading">Assets — Real Estate & Business</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:20px;margin-bottom:8px">
+      <div class="section-heading" style="margin:0">Assets — Real Estate & Business</div>
+      <button class="btn btn-sm" onclick="addAccount('other')">+ Add Account</button>
+    </div>
     <div class="account-grid" id="acctOther"></div>
 
-    <div class="section-heading">Liabilities</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-top:20px;margin-bottom:8px">
+      <div class="section-heading" style="margin:0">Liabilities</div>
+      <button class="btn btn-sm" onclick="addAccount('liabilities')">+ Add Account</button>
+    </div>
     <div class="account-grid" id="acctLiabilities"></div>
   </div>
 
@@ -1103,6 +1115,7 @@ function loadData() {
     rules: JSON.parse(localStorage.getItem('fin_rules') || 'null') || [...DEFAULT_RULES],
     income: JSON.parse(localStorage.getItem('fin_income') || '{}'),
     apiKey: localStorage.getItem('fin_apiKey') || '',
+    goals: JSON.parse(localStorage.getItem('fin_goals') || 'null') || { grossIncomeGoal: 300000, magnoliaGoal: 10000, magnoliaActual: 0 },
   };
 }
 
@@ -1112,6 +1125,7 @@ function saveData(data) {
   localStorage.setItem('fin_snapshots', JSON.stringify(data.snapshots));
   localStorage.setItem('fin_rules', JSON.stringify(data.rules));
   localStorage.setItem('fin_income', JSON.stringify(data.income));
+  localStorage.setItem('fin_goals', JSON.stringify(data.goals || {}));
 }
 
 let DB = loadData();
@@ -1796,6 +1810,41 @@ function destroyChart(id) {
 // ═══════════════════════════════════════════════════════
 //  ACCOUNTS TAB
 // ═══════════════════════════════════════════════════════
+function addAccount(group) {
+  const typeOptions = {
+    cash: ['cash'],
+    investments: ['investment'],
+    other: ['business', 'real_estate'],
+    liabilities: ['liability']
+  }[group] || ['cash'];
+
+  const typeSelHtml = typeOptions.map(t => '<option value="' + t + '">' + t + '</option>').join('');
+  const bodyHTML = '<div class="form-group"><label>Account Name</label>' +
+    '<input type="text" id="newAcctName" placeholder="e.g. Car Loan, Joint Checking"></div>' +
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">' +
+    '<div class="form-group" style="margin-bottom:0"><label>Current Balance</label>' +
+    '<input type="number" id="newAcctBalance" value="0" step="0.01"></div>' +
+    '<div class="form-group" style="margin-bottom:0"><label>Type</label>' +
+    '<select id="newAcctType">' + typeSelHtml + '</select></div></div>';
+
+  openModal('Add Account', bodyHTML, [
+    { label:'Cancel', cls:'btn', action: closeModal },
+    { label:'Add Account', cls:'btn btn-accent', action: () => {
+      const name = document.getElementById('newAcctName').value.trim();
+      const balance = parseFloat(document.getElementById('newAcctBalance').value) || 0;
+      const type = document.getElementById('newAcctType').value;
+      if (!name) { showToast('Please enter an account name'); return; }
+      const id = 'acct_' + Date.now();
+      DB.accounts[group].push({ id, name, type, balance });
+      saveData(DB);
+      renderAccountsTab();
+      updateMetricsStrip();
+      closeModal();
+      showToast(name + ' added');
+    }}
+  ]);
+}
+
 function renderAccountsTab() {
   renderAccountGroup('acctCash', DB.accounts.cash, 'var(--accent)');
   renderAccountGroup('acctInvestments', DB.accounts.investments, 'var(--blue)');
@@ -1837,13 +1886,20 @@ function deltaColor(delta, isLiability) {
 }
 
 function openAccountEdit(ac, isLiability) {
-  openModal(`Update: ${ac.name}`, `
-    <div class="form-group">
-      <label>Current Balance</label>
-      <input type="number" id="editBalance" value="${ac.balance}" step="0.01">
-    </div>
-    <div style="font-size:11px;color:var(--text3)">Enter the current balance as a positive number.</div>
-  `, [
+  const isCustom = ac.id.startsWith('acct_');
+  const deleteBtn = isCustom ? [{ label:'Delete Account', cls:'btn btn-danger', action: () => {
+    if (!confirm('Delete ' + ac.name + '? This cannot be undone.')) return;
+    const group = Object.keys(DB.accounts).find(k => DB.accounts[k].find(a => a.id === ac.id));
+    if (group) DB.accounts[group] = DB.accounts[group].filter(a => a.id !== ac.id);
+    saveData(DB); renderAccountsTab(); updateMetricsStrip(); closeModal();
+  }}] : [];
+
+  const bodyHTML = '<div class="form-group"><label>Current Balance</label>' +
+    '<input type="number" id="editBalance" value="' + ac.balance + '" step="0.01"></div>' +
+    '<div style="font-size:11px;color:var(--text3)">Enter the current balance as a positive number.</div>';
+
+  openModal('Update: ' + ac.name, bodyHTML, [
+    ...deleteBtn,
     { label:'Cancel', cls:'btn', action: closeModal },
     { label:'Save', cls:'btn btn-accent', action: () => {
       const val = parseFloat(document.getElementById('editBalance').value) || 0;
@@ -1889,6 +1945,24 @@ function getAllMonths() {
   DB.transactions.forEach(tx => set.add(getYearMonth(tx.date)));
   set.add(thisMonth());
   return [...set].sort().reverse();
+}
+
+function addCategoryInline() {
+  const name = prompt('New category name:');
+  if (!name || !name.trim()) return;
+  const trimmed = name.trim();
+  const cats = getCategories();
+  if (cats.includes(trimmed)) { showToast('Category already exists'); return; }
+  cats.push(trimmed);
+  saveCategories(cats);
+  // Update the dropdown in the open modal
+  const sel = document.getElementById('manualCategory');
+  if (sel) {
+    const opt = document.createElement('option');
+    opt.value = trimmed; opt.textContent = trimmed; opt.selected = true;
+    sel.appendChild(opt);
+  }
+  showToast('Category "' + trimmed + '" added');
 }
 
 function addManualTransaction() {
