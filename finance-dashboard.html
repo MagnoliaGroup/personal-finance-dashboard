@@ -7,7 +7,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <style>
-  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Syne:wght@400;600;700;800&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=Inter:wght@400;500;600;700;800&display=swap');
 
   :root {
     --bg: #0a0b0e;
@@ -29,7 +29,7 @@
     --amber: #fbbf24;
     --purple: #a78bfa;
     --mono: 'DM Mono', monospace;
-    --sans: 'Syne', sans-serif;
+    --sans: 'Inter', sans-serif;
   }
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -39,6 +39,7 @@
     color: var(--text);
     font-family: var(--mono);
     font-size: 13px;
+    font-variant-numeric: tabular-nums;
     min-height: 100vh;
     overflow-x: hidden;
   }
@@ -132,8 +133,9 @@
     font-family: var(--sans);
     font-size: 26px;
     font-weight: 700;
-    letter-spacing: -1px;
+    letter-spacing: -0.5px;
     line-height: 1;
+    font-variant-numeric: tabular-nums lining-nums;
   }
 
   .metric-delta {
@@ -261,6 +263,7 @@
     font-size: 22px;
     font-weight: 700;
     letter-spacing: -0.5px;
+    font-variant-numeric: tabular-nums lining-nums;
   }
 
   .account-delta {
@@ -333,7 +336,7 @@
   .flow-dest:hover { border-color: var(--border2); }
 
   .flow-label { font-size: 11px; color: var(--text2); }
-  .flow-amount { font-family: var(--sans); font-size: 15px; font-weight: 700; }
+  .flow-amount { font-family: var(--sans); font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
   .flow-pct { font-size: 10px; color: var(--text3); }
 
   /* ── TRANSACTION TABLE ── */
@@ -455,7 +458,7 @@
   .expense-bar-label { width: 160px; font-size: 12px; color: var(--text2); flex-shrink: 0; }
   .expense-bar-track { flex: 1; background: var(--bg4); border-radius: 4px; height: 8px; overflow: hidden; }
   .expense-bar-fill { height: 100%; border-radius: 4px; background: var(--blue); transition: width 0.5s cubic-bezier(.4,0,.2,1); }
-  .expense-bar-amount { width: 80px; text-align: right; font-family: var(--sans); font-weight: 600; font-size: 13px; }
+  .expense-bar-amount { width: 80px; text-align: right; font-family: var(--sans); font-weight: 600; font-size: 13px; font-variant-numeric: tabular-nums lining-nums; }
   .expense-bar-pct { width: 40px; text-align: right; font-size: 11px; color: var(--text3); }
 
   /* ── RULES PAGE ── */
@@ -696,14 +699,14 @@
         <div class="card-header">
           <div><div class="card-title">Net Worth</div><div class="card-sub">Total assets minus liabilities</div></div>
         </div>
-        <div style="font-family:var(--sans);font-size:32px;font-weight:800;letter-spacing:-1.5px;color:var(--accent)" id="ovNetWorth">$0</div>
+        <div style="font-family:var(--sans);font-size:32px;font-weight:700;letter-spacing:-0.5px;color:var(--accent);font-variant-numeric:tabular-nums lining-nums" id="ovNetWorth">$0</div>
         <div style="margin-top:8px" class="chart-wrap"><canvas id="chartNetWorthTrend" height="60"></canvas></div>
       </div>
       <div class="card">
         <div class="card-header">
           <div><div class="card-title">Liquid Assets</div><div class="card-sub">Cash + accessible investments</div></div>
         </div>
-        <div style="font-family:var(--sans);font-size:32px;font-weight:800;letter-spacing:-1.5px;color:var(--blue)" id="ovLiquid">$0</div>
+        <div style="font-family:var(--sans);font-size:32px;font-weight:700;letter-spacing:-0.5px;color:var(--blue);font-variant-numeric:tabular-nums lining-nums" id="ovLiquid">$0</div>
         <div style="margin-top:8px;height:140px" class="chart-wrap"><canvas id="chartLiquidBreakdown"></canvas></div>
       </div>
     </div>
@@ -716,7 +719,7 @@
       <div class="flow-layout" id="moneyFlow" style="position:relative">
         <div class="flow-source" id="flowSrc" onclick="showFlowDrill('grossIncome')" title="Click to manage gross income">
           <div style="font-size:9px;color:rgba(74,222,128,0.5);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px">Gross Income</div>
-          <div id="flowIncome" style="font-family:var(--sans);font-size:22px;font-weight:800;color:var(--accent);letter-spacing:-1px;line-height:1">$0</div>
+          <div id="flowIncome" style="font-family:var(--sans);font-size:22px;font-weight:700;color:var(--accent);letter-spacing:-0.5px;line-height:1;font-variant-numeric:tabular-nums lining-nums">$0</div>
           <div style="font-size:9px;color:rgba(74,222,128,0.3);margin-top:4px">click to manage</div>
         </div>
         <div style="flex:0 0 80px;position:relative;align-self:stretch"></div>
