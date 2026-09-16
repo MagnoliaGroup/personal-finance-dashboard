@@ -730,7 +730,7 @@
 
     <div class="card">
       <div class="card-header">
-        <div><div class="card-title">Income vs Expenses</div><div class="card-sub">Month by month — current year vs prior year</div></div>
+        <div><div class="card-title">Monthly Expenses</div><div class="card-sub">Month by month — current year vs prior year</div></div>
         <div class="month-selector">
           <select id="ovYearSelect" onchange="renderOverviewCharts()" style="width:90px"></select>
         </div>
@@ -1705,18 +1705,18 @@ function renderOverviewCharts() {
     }
   });
 
-  // Income vs Expenses area chart
+  // Monthly Expenses chart — current year vs prior year
   const year = parseInt(document.getElementById('ovYearSelect').value);
   const months = Array.from({length:12},(_,i)=>`${year}-${String(i+1).padStart(2,'0')}`);
-  const incomeData = months.map(m => getMonthIncome(m));
   const expData = months.map(m => getMonthSpent(m));
 
   const prevYear = year - 1;
   const prevMonths = Array.from({length:12},(_,i)=>`${prevYear}-${String(i+1).padStart(2,'0')}`);
-  const prevIncomeData = prevMonths.map(m => getMonthIncome(m));
   const prevExpData = prevMonths.map(m => {
     const txs = getMonthTransactions(m);
-    return txs.filter(t => t.amount < 0 && !isTransfer(t) && !isCreditCardPayment(t) && t.category !== 'Tax' && t.category !== 'Insurance').reduce((s,t)=>s+Math.abs(t.amount),0);
+    return txs.filter(t => t.amount < 0 && !isTransfer(t) && !isCreditCardPayment(t)
+      && t.category !== 'Tax' && t.category !== 'Insurance' && t.category !== 'Long Term Investments')
+      .reduce((s,t)=>s+Math.abs(t.amount),0);
   });
 
   destroyChart('chartIncomeExpenses');
@@ -1725,23 +1725,21 @@ function renderOverviewCharts() {
     data:{
       labels:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
       datasets:[
-        { label:`${year} Income`, data:incomeData, backgroundColor:'rgba(74,222,128,0.4)', borderColor:'#4ade80', borderWidth:1.5, borderRadius:3 },
-        { label:`${year} Expenses`, data:expData, backgroundColor:'rgba(248,113,113,0.4)', borderColor:'#f87171', borderWidth:1.5, borderRadius:3 },
-        { label:`${prevYear} Income`, data:prevIncomeData, backgroundColor:'rgba(74,222,128,0.15)', borderColor:'rgba(74,222,128,0.4)', borderWidth:1, borderRadius:3, borderDash:[4,4] },
-        { label:`${prevYear} Expenses`, data:prevExpData, backgroundColor:'rgba(248,113,113,0.15)', borderColor:'rgba(248,113,113,0.4)', borderWidth:1, borderRadius:3 },
+        { label:`${year} Expenses`, data:expData, backgroundColor:'rgba(248,113,113,0.5)', borderColor:'#f87171', borderWidth:1.5, borderRadius:3 },
+        { label:`${prevYear} Expenses`, data:prevExpData, backgroundColor:'rgba(248,113,113,0.18)', borderColor:'rgba(248,113,113,0.45)', borderWidth:1, borderRadius:3 },
       ]
     },
     options:{
       responsive:true,
       plugins:{
-        legend:{ labels:{ color:'#8a8f9e', font:{family:'DM Mono',size:11}, boxWidth:12, padding:12 } },
+        legend:{ labels:{ color:'#8a8f9e', font:{family:'Inter',size:11}, boxWidth:12, padding:12 } },
         tooltip:{ backgroundColor:'#1e222c', titleColor:'#e8eaf0', bodyColor:'#8a8f9e', borderColor:'rgba(255,255,255,0.12)', borderWidth:1,
           callbacks:{ label: ctx => ` ${ctx.dataset.label}: $${ctx.raw.toLocaleString()}` }
         }
       },
       scales:{
-        x:{ grid:{ color:'rgba(255,255,255,0.04)' }, ticks:{ color:'#545868', font:{family:'DM Mono',size:11} } },
-        y:{ grid:{ color:'rgba(255,255,255,0.04)' }, ticks:{ color:'#545868', font:{family:'DM Mono',size:11},
+        x:{ grid:{ color:'rgba(255,255,255,0.04)' }, ticks:{ color:'#545868', font:{family:'Inter',size:11} } },
+        y:{ grid:{ color:'rgba(255,255,255,0.04)' }, ticks:{ color:'#545868', font:{family:'Inter',size:11},
             callback: v => '$'+v.toLocaleString() } }
       }
     }
