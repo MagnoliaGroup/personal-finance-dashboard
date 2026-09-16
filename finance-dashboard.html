@@ -3409,8 +3409,10 @@ CRITICAL: Return ONLY valid JSON — no markdown, no explanation, no fences. Sta
 
 === CHASE CSV FORMAT ===
 Columns: Transaction Date, Post Date, Description, Category, Type, Amount, Memo
+- IMPORTANT: Use the POST DATE (column 2) as the transaction date, not the Transaction Date
 - Amount is already signed (negative = expense, positive = credit/return)
-- Include: Type=Sale (negative), Type=Return (positive), Type=Fee (negative)
+- Include: Type=Sale (negative), Type=Fee (negative)
+- EXCLUDE: Type=Return rows (positive amounts are refunds — do not include)
 - EXCLUDE entirely: Type=Payment rows (e.g. "AUTOMATIC PAYMENT")
 - source field = "chase"
 
