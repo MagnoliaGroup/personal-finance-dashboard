@@ -730,10 +730,8 @@
 
     <div class="card">
       <div class="card-header">
-        <div><div class="card-title">Monthly Expenses</div><div class="card-sub">Month by month — current year vs prior year</div></div>
-        <div class="month-selector">
-          <select id="ovYearSelect" onchange="renderOverviewCharts()" style="width:90px"></select>
-        </div>
+        <div><div class="card-title">Monthly Expenses</div><div class="card-sub">Month by month — select years to compare</div></div>
+        <div id="expYearPicker" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"></div>
       </div>
       <div class="chart-wrap"><canvas id="chartIncomeExpenses" height="140"></canvas></div>
     </div>
@@ -1562,14 +1560,35 @@ function updateMetricsStrip() {
 //  OVERVIEW CHARTS
 // ═══════════════════════════════════════════════════════
 function populateYearSelector() {
-  const sel = document.getElementById('ovYearSelect');
+  const picker = document.getElementById('expYearPicker');
+  if (!picker) return;
   const currentYear = new Date().getFullYear();
-  sel.innerHTML = '';
-  for (let y = currentYear; y >= currentYear-4; y--) {
-    const o = document.createElement('option');
-    o.value = y; o.textContent = y;
-    sel.appendChild(o);
-  }
+  const yearsSet = new Set([currentYear, currentYear - 1]);
+  DB.transactions.forEach(t => yearsSet.add(new Date(t.date).getFullYear()));
+  const years = [...yearsSet].filter(y => y >= currentYear - 6).sort((a,b) => b - a);
+
+  // Preserve existing selections or default to current + prior year
+  const existing = getSelectedExpYears();
+  picker.innerHTML = '';
+  years.forEach(y => {
+    const isChecked = existing.length > 0 ? existing.includes(y) : (y >= currentYear - 1);
+    const label = document.createElement('label');
+    label.style.cssText = 'display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text2);cursor:pointer;white-space:nowrap';
+    const cb = document.createElement('input');
+    cb.type = 'checkbox';
+    cb.value = y;
+    cb.checked = isChecked;
+    cb.onchange = () => renderOverviewCharts();
+    label.appendChild(cb);
+    label.appendChild(document.createTextNode(y));
+    picker.appendChild(label);
+  });
+}
+
+function getSelectedExpYears() {
+  const picker = document.getElementById('expYearPicker');
+  if (!picker) return [];
+  return Array.from(picker.querySelectorAll('input[type=checkbox]:checked')).map(cb => parseInt(cb.value));
 }
 
 function populateFlowYearSelector() {
@@ -1705,18 +1724,30 @@ function renderOverviewCharts() {
     }
   });
 
-  // Monthly Expenses chart — current year vs prior year
-  const year = parseInt(document.getElementById('ovYearSelect').value);
-  const months = Array.from({length:12},(_,i)=>`${year}-${String(i+1).padStart(2,'0')}`);
-  const expData = months.map(m => getMonthSpent(m));
+  // Monthly Expenses chart — multi-year selectable
+  const selectedYears = getSelectedExpYears().sort((a,b) => b - a);
+  if (selectedYears.length === 0) { destroyChart('chartIncomeExpenses'); return; }
 
-  const prevYear = year - 1;
-  const prevMonths = Array.from({length:12},(_,i)=>`${prevYear}-${String(i+1).padStart(2,'0')}`);
-  const prevExpData = prevMonths.map(m => {
-    const txs = getMonthTransactions(m);
-    return txs.filter(t => t.amount < 0 && !isTransfer(t) && !isCreditCardPayment(t)
-      && t.category !== 'Tax' && t.category !== 'Insurance' && t.category !== 'Long Term Investments')
-      .reduce((s,t)=>s+Math.abs(t.amount),0);
+  // Color palette per year — most recent is solid red, older ones fade
+  const palettes = [
+    { bg:'rgba(248,113,113,0.55)', border:'#f87171' },
+    { bg:'rgba(251,191,36,0.45)',  border:'#fbbf24' },
+    { bg:'rgba(96,165,250,0.45)',  border:'#60a5fa' },
+    { bg:'rgba(167,139,250,0.45)', border:'#a78bfa' },
+    { bg:'rgba(74,222,128,0.45)',  border:'#4ade80' },
+    { bg:'rgba(248,113,113,0.2)',  border:'rgba(248,113,113,0.5)' },
+  ];
+
+  const datasets = selectedYears.map((y, i) => {
+    const months = Array.from({length:12},(_,m)=>`${y}-${String(m+1).padStart(2,'0')}`);
+    const data = months.map(m => {
+      const txs = getMonthTransactions(m);
+      return txs.filter(t => t.amount < 0 && !isTransfer(t) && !isCreditCardPayment(t)
+        && t.category !== 'Tax' && t.category !== 'Insurance' && t.category !== 'Long Term Investments')
+        .reduce((s,t) => s + Math.abs(t.amount), 0);
+    });
+    const pal = palettes[i] || palettes[palettes.length-1];
+    return { label:`${y}`, data, backgroundColor:pal.bg, borderColor:pal.border, borderWidth:1.5, borderRadius:3 };
   });
 
   destroyChart('chartIncomeExpenses');
@@ -1724,10 +1755,7 @@ function renderOverviewCharts() {
     type:'bar',
     data:{
       labels:['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
-      datasets:[
-        { label:`${year} Expenses`, data:expData, backgroundColor:'rgba(248,113,113,0.5)', borderColor:'#f87171', borderWidth:1.5, borderRadius:3 },
-        { label:`${prevYear} Expenses`, data:prevExpData, backgroundColor:'rgba(248,113,113,0.18)', borderColor:'rgba(248,113,113,0.45)', borderWidth:1, borderRadius:3 },
-      ]
+      datasets
     },
     options:{
       responsive:true,
