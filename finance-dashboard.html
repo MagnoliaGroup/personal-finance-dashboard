@@ -1057,8 +1057,8 @@ Object.defineProperty(window, 'CATEGORIES', { get: getCategories });
 // Keywords that indicate a transfer/internal movement — never count as income or expense
 const TRANSFER_KEYWORDS = [
   'TRANSFER', 'XFER', 'ZELLE TO', 'ZELLE FROM', 'ACH TO', 'ACH FROM',
-  'ONLINE PAYMENT', 'PAYMENT THANK YOU', 'AUTOPAY', 'CHASE PAYMENT',
-  'CREDIT CARD PAYMENT', 'CC PAYMENT', 'CARD PAYMENT',
+  'PAYMENT THANK YOU', 'AUTOPAY',
+  'CHASE CREDIT CRD',
   'OLD NATIONAL TO', 'OLD NATIONAL FROM', 'INTERNAL',
   'INVESTMENT TRANSFER', 'BROKERAGE', 'VANGUARD TRANSFER',
   'SCHWAB TRANSFER', 'FIDELITY TRANSFER'
@@ -1070,8 +1070,9 @@ function isTransfer(tx) {
 }
 
 function isCreditCardPayment(tx) {
-  const m = (tx.merchant || '').toUpperCase();
-  return m.includes('CHASE') && (m.includes('PAYMENT') || m.includes('AUTOPAY') || m.includes('CREDIT'));
+  // Only filter CC payments that are from the CC account itself (type=Payment rows in Chase CSV)
+  // Old National checking payments TO Chase are real expenses and should NOT be filtered
+  return tx.source === 'chase' && tx.category === 'Credit Card Payment';
 }
 
 const DEFAULT_ACCOUNTS = {
@@ -3419,7 +3420,11 @@ Columns: Transaction Number, Date, Description, Memo, Amount Debit, Amount Credi
 - Amount Credit column = money IN (deposits) — use as POSITIVE number
 - If filename contains "checking" set source = "on_checking"; if "savings" set source = "on_savings"
 - INCLUDE as income transactions (positive amount): payroll, direct deposit, BASF AGRICULTURA, DEACONESS HOSPIT PAYROLL, VENMO CASHOUT, Mobile Deposit, tax refunds, any Amount Credit entry that is not a transfer
-- EXCLUDE entirely — do not add to transactions array: rows where Description or Memo contains any of: TRANSFER, INT TXFR, ZELLE TO, ACH TO, ONLINE PMT, DISCOVER E-PAYMENT, TRUIST MORTG, CHASE PAYMENT, AUTOMATIC PAYMENT
+- EXCLUDE entirely — do not add to transactions array: rows where Description or Memo contains any of: ZELLE TO, ACH TO, ONLINE PMT, DISCOVER E-PAYMENT, AUTOMATIC PAYMENT
+- EXCLUDE "CHASE CREDIT CRD AUTOPAY" specifically — this is a credit card bill payment that would double-count with the Chase CC CSV
+- EXCLUDE rows where Description contains "INT TXFR" AND Memo does NOT contain "CAR PAYMENT", "AUTO", "LOAN", or "MORTGAGE" — generic internal transfers should be excluded but loan payments should be kept
+- DO NOT exclude mortgage payments (TRUIST MORTG, MORTG, MORTGAGE) — these are real expenses, categorize as "Mortgage"
+- DO NOT exclude car payments — if Memo contains "CAR PAYMENT", "AUTO PAYMENT", or "AUTO LOAN", keep the transaction and categorize as "Car Payment"
 - For Old National debits (expenses): include as negative amount with appropriate category
 - Convert Old National dates from MM/DD/YYYY to YYYY-MM-DD
 
