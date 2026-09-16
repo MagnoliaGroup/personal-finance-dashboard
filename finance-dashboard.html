@@ -3437,6 +3437,7 @@ Columns: Transaction Number, Date, Description, Memo, Amount Debit, Amount Credi
         const resp = await callClaude(sysPrompt, [{ type:'text', text: textPart }]);
         const result = parseClaudeJSON(resp);
         const txCount = (result.transactions||[]).length;
+        (result.transactions || []).forEach(t => { t.fileName = batch.fileName; });
         allTransactions.push(...(result.transactions || []));
         Object.entries(result.income || {}).forEach(([k,v]) => allIncome[k] = (allIncome[k]||0)+v);
         allAccountUpdates.push(...(result.account_updates || []));
@@ -3485,43 +3486,201 @@ For investment screenshots: extract the total account value as balance.`;
     addLine(`⚠️ ${pdfs.map(f=>f.name).join(', ')} — PDFs can't be read directly. Take a screenshot of the key page and upload that instead.`, true);
   }
 
-  // ── STEP 4: Apply all results ───────────────────────────
-  const lSave = addLine('Saving data...');
+  // ── STEP 4: Build review UI — nothing saved yet ─────────
+  addLine('AI processing complete — review transactions below before saving.', true);
 
   const newTxs = allTransactions.map(tx => ({
     ...tx,
     id: 'tx_' + Date.now() + '_' + Math.random().toString(36).slice(2)
   }));
+  const existingKeys = new Set(DB.transactions.map(t => t.date+'|'+t.merchant+'|'+t.amount));
+  const unique = newTxs.filter(t => !existingKeys.has(t.date+'|'+t.merchant+'|'+t.amount));
+  const dupeCount = newTxs.length - unique.length;
 
-  const existingKeys = new Set(DB.transactions.map(t=>`${t.date}|${t.merchant}|${t.amount}`));
-  const unique = newTxs.filter(t => !existingKeys.has(`${t.date}|${t.merchant}|${t.amount}`));
-  DB.transactions.push(...unique);
-
-  Object.entries(allIncome).forEach(([ym, amt]) => {
-    DB.income[ym] = (DB.income[ym] || 0) + amt;
-  });
-
-  allAccountUpdates.forEach(upd => {
-    const allGroups = ['cash','investments','other','liabilities'];
-    for (const g of allGroups) {
-      const ac = DB.accounts[g].find(a=>a.id===upd.id);
-      if (ac) { ac.balance = upd.balance; break; }
-    }
-  });
-
-  saveData(DB);
-  lSave.innerHTML = '<span>✅</span> All data saved';
-
+  // Show review card
   const summaryCard = document.getElementById('aiSummaryCard');
+  const summaryText = document.getElementById('aiSummaryText');
   summaryCard.style.display = 'block';
-  document.getElementById('aiSummaryText').textContent =
-    (summaries.join('\n') || 'Processing complete.') +
-    `\n\n• ${unique.length} new transactions imported (${newTxs.length - unique.length} duplicates skipped)` +
-    `\n• Income transactions found: ${unique.filter(t => t.amount > 0 && (t.source === 'on_checking' || t.source === 'on_savings')).length} deposits from Old National accounts` +
-    `\n• Account updates: ${allAccountUpdates.map(a=>`${a.name||a.id}: ${fmt(a.balance)}`).join(', ')||'none'}`;
+  summaryText.innerHTML = '';
 
-  renderAll();
-  populateMonthSelectors();
+  // Staged transactions — track removed state
+  const staged = unique.map(tx => ({ ...tx, _removed: false }));
+
+  function getCategories_local() { return getCategories(); }
+
+  function rebuildReview() {
+    summaryText.innerHTML = '';
+    const kept = staged.filter(t => !t._removed);
+    const removed = staged.filter(t => t._removed);
+    const totalAmt = kept.filter(t => t.amount < 0).reduce((s,t) => s + Math.abs(t.amount), 0);
+
+    // Header stats bar
+    const statsBar = document.createElement('div');
+    statsBar.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding:12px 16px;background:var(--bg3);border-radius:8px;border:1px solid var(--border)';
+    statsBar.innerHTML =
+      '<div><div style="font-size:13px;font-weight:700;color:var(--text)">Review before saving</div>' +
+      '<div style="font-size:11px;color:var(--text3);margin-top:2px">Remove anything wrong or change categories — nothing is saved until you approve</div></div>' +
+      '<div style="display:flex;gap:20px;text-align:center">' +
+      '<div><div style="font-size:18px;font-weight:700;color:var(--accent);font-variant-numeric:tabular-nums">' + kept.length + '</div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">keeping</div></div>' +
+      '<div><div style="font-size:18px;font-weight:700;color:var(--red);font-variant-numeric:tabular-nums">' + removed.length + '</div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">removed</div></div>' +
+      '<div><div style="font-size:18px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums">' + fmt(totalAmt) + '</div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">total</div></div>' +
+      (dupeCount ? '<div><div style="font-size:18px;font-weight:700;color:var(--text3);font-variant-numeric:tabular-nums">' + dupeCount + '</div><div style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em">dupes skipped</div></div>' : '') +
+      '</div>';
+    summaryText.appendChild(statsBar);
+
+    // Group by file
+    const fileGroups = {};
+    staged.forEach(tx => {
+      const src = tx.fileName || tx.source || 'Unknown';
+      if (!fileGroups[src]) fileGroups[src] = [];
+      fileGroups[src].push(tx);
+    });
+
+    const cats = getCategories_local();
+
+    Object.entries(fileGroups).forEach(([fileName, txs]) => {
+      const keptInFile = txs.filter(t => !t._removed);
+      const fileTotal = keptInFile.filter(t => t.amount < 0).reduce((s,t) => s + Math.abs(t.amount), 0);
+
+      const section = document.createElement('div');
+      section.style.cssText = 'margin-bottom:12px;border:1px solid var(--border);border-radius:8px;overflow:hidden';
+
+      // File header
+      const fh = document.createElement('div');
+      fh.style.cssText = 'display:flex;align-items:center;justify-content:space-between;padding:9px 14px;background:var(--bg3);border-bottom:1px solid var(--border)';
+      fh.innerHTML =
+        '<div style="display:flex;align-items:center;gap:8px">' +
+        '<span style="font-size:12px;font-weight:600;color:var(--text)">📊 ' + fileName + '</span>' +
+        '<span style="font-size:11px;color:var(--text3)">' + keptInFile.length + ' of ' + txs.length + ' transactions</span></div>' +
+        '<span style="font-size:12px;color:var(--red);font-variant-numeric:tabular-nums">' + (fileTotal > 0 ? '−' + fmt(fileTotal) : '') + '</span>';
+      section.appendChild(fh);
+
+      // Transaction table
+      const tbl = document.createElement('table');
+      tbl.style.cssText = 'width:100%;border-collapse:collapse';
+      tbl.innerHTML = '<thead><tr>' +
+        '<th style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:7px 14px;text-align:left;border-bottom:1px solid var(--border)">Date</th>' +
+        '<th style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:7px 14px;text-align:left;border-bottom:1px solid var(--border)">Merchant</th>' +
+        '<th style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:7px 14px;text-align:left;border-bottom:1px solid var(--border)">Category</th>' +
+        '<th style="font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:7px 14px;text-align:right;border-bottom:1px solid var(--border)">Amount</th>' +
+        '<th style="border-bottom:1px solid var(--border);width:70px"></th></tr></thead>';
+      const tbody = document.createElement('tbody');
+
+      txs.sort((a,b) => new Date(b.date)-new Date(a.date)).forEach((tx, i) => {
+        const tr = document.createElement('tr');
+        if (tx._removed) tr.style.cssText = 'opacity:0.3';
+
+        const tdDate = document.createElement('td');
+        tdDate.style.cssText = 'font-size:12px;color:var(--text3);padding:8px 14px;border-bottom:1px solid rgba(255,255,255,0.04)';
+        tdDate.textContent = new Date(tx.date).toLocaleDateString('en-US',{month:'short',day:'numeric'});
+
+        const tdMerch = document.createElement('td');
+        tdMerch.style.cssText = 'font-size:12px;color:var(--text2);padding:8px 14px;border-bottom:1px solid rgba(255,255,255,0.04)';
+        if (tx._removed) { const s = document.createElement('s'); s.textContent = tx.merchant; tdMerch.appendChild(s); }
+        else tdMerch.textContent = tx.merchant;
+
+        const tdCat = document.createElement('td');
+        tdCat.style.cssText = 'padding:8px 14px;border-bottom:1px solid rgba(255,255,255,0.04)';
+        if (!tx._removed) {
+          const sel = document.createElement('select');
+          sel.style.cssText = 'background:var(--bg3);border:1px solid var(--border);border-radius:4px;color:var(--text2);font-size:11px;padding:2px 6px;cursor:pointer';
+          cats.forEach(c => {
+            const o = document.createElement('option');
+            o.value = c; o.textContent = c;
+            if (c === tx.category) o.selected = true;
+            sel.appendChild(o);
+          });
+          sel.onchange = () => { tx.category = sel.value; };
+          tdCat.appendChild(sel);
+        } else {
+          tdCat.style.fontSize = '11px';
+          tdCat.style.color = 'var(--text3)';
+          tdCat.textContent = tx.category || 'Misc';
+        }
+
+        const tdAmt = document.createElement('td');
+        tdAmt.style.cssText = 'font-size:12px;font-weight:600;text-align:right;padding:8px 14px;border-bottom:1px solid rgba(255,255,255,0.04);font-variant-numeric:tabular-nums;color:' + (tx.amount < 0 ? 'var(--red)' : 'var(--accent)');
+        tdAmt.textContent = (tx.amount < 0 ? '−' : '+') + fmt(Math.abs(tx.amount));
+
+        const tdBtn = document.createElement('td');
+        tdBtn.style.cssText = 'padding:8px 14px;border-bottom:1px solid rgba(255,255,255,0.04);text-align:center';
+        const btn = document.createElement('button');
+        if (tx._removed) {
+          btn.style.cssText = 'background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);border-radius:4px;color:var(--text3);font-size:10px;padding:3px 8px;cursor:pointer';
+          btn.textContent = 'Undo';
+        } else {
+          btn.style.cssText = 'background:rgba(248,113,113,0.1);border:1px solid rgba(248,113,113,0.25);border-radius:4px;color:var(--red);font-size:10px;padding:3px 8px;cursor:pointer';
+          btn.textContent = 'Remove';
+        }
+        btn.onclick = () => { tx._removed = !tx._removed; rebuildReview(); };
+        tdBtn.appendChild(btn);
+
+        tr.appendChild(tdDate); tr.appendChild(tdMerch); tr.appendChild(tdCat);
+        tr.appendChild(tdAmt); tr.appendChild(tdBtn);
+        tbody.appendChild(tr);
+      });
+      tbl.appendChild(tbody);
+      section.appendChild(tbl);
+      summaryText.appendChild(section);
+    });
+
+    // Footer: Approve + Discard buttons
+    const footer = document.createElement('div');
+    footer.style.cssText = 'display:flex;align-items:center;justify-content:space-between;margin-top:16px;padding-top:16px;border-top:1px solid var(--border)';
+    const removedMsg = document.createElement('span');
+    removedMsg.style.cssText = 'font-size:11px;color:var(--red)';
+    removedMsg.textContent = removed.length > 0 ? removed.length + ' transaction' + (removed.length > 1 ? 's' : '') + ' will be discarded' : '';
+    footer.appendChild(removedMsg);
+
+    const btnWrap = document.createElement('div');
+    btnWrap.style.cssText = 'display:flex;gap:10px';
+
+    const discardBtn = document.createElement('button');
+    discardBtn.className = 'btn';
+    discardBtn.textContent = 'Discard all';
+    discardBtn.onclick = () => {
+      summaryCard.style.display = 'none';
+      summaryText.innerHTML = '';
+      clearUploadFiles();
+      showToast('Upload discarded — nothing was saved');
+    };
+
+    const approveBtn = document.createElement('button');
+    approveBtn.className = 'btn btn-accent';
+    approveBtn.textContent = '✓ Approve and save (' + kept.length + ' transactions)';
+    approveBtn.onclick = () => {
+      // Save only kept transactions
+      const toSave = kept.map(tx => {
+        const { _removed, ...clean } = tx;
+        return clean;
+      });
+      DB.transactions.push(...toSave);
+
+      // Apply account updates
+      allAccountUpdates.forEach(upd => {
+        const allGroups = ['cash','investments','other','liabilities'];
+        for (const g of allGroups) {
+          const ac = DB.accounts[g].find(a=>a.id===upd.id);
+          if (ac) { ac.balance = upd.balance; break; }
+        }
+      });
+
+      saveData(DB);
+      summaryCard.style.display = 'none';
+      summaryText.innerHTML = '';
+      clearUploadFiles();
+      renderAll();
+      populateMonthSelectors();
+      showToast('✓ ' + kept.length + ' transactions saved!');
+    };
+
+    btnWrap.appendChild(discardBtn);
+    btnWrap.appendChild(approveBtn);
+    footer.appendChild(btnWrap);
+    summaryText.appendChild(footer);
+  }
+
+  rebuildReview();
 }
 
 async function callClaude(system, messageContent) {
